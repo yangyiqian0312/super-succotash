@@ -1,0 +1,14 @@
+[
+  {
+    "internal_sku": "DEMO-SKU-001",
+    "shopify_inventory_item_id": "1234567890",
+    "shopify_variant_id": "shopify-var-1",
+    "tiktok_product_id": "17293822501",
+    "tiktok_sku_id": "17293822502",
+    "buffer_quantity": 2,
+    "sync_enabled": true,
+    "tiktok_seller_sku": "DEMO-SKU-001",
+    "shopify_product_title": "Studio Hoodie",
+    "shopify_variant_title": "Black / M"
+  }
+]
