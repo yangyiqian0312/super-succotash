@@ -84,6 +84,37 @@ async function tiktokFetchAbsolute<T>(url: string, init?: RequestInit): Promise<
   });
 }
 
+export function buildTikTokSignedUrl(input: {
+  path: string;
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  query?: Record<string, string>;
+  body?: Record<string, unknown>;
+  version?: string;
+}) {
+  const version = input.version ?? config.tiktokApiVersion;
+  const queryInput: Record<string, string> = {
+    access_token: config.tiktokAccessToken,
+    app_key: config.tiktokAppKey,
+    shop_cipher: config.tiktokShopCipher,
+    timestamp: String(Math.floor(Date.now() / 1000)),
+    version,
+    ...(config.tiktokShopId ? { shop_id: config.tiktokShopId } : {}),
+    ...(input.query ?? {}),
+  };
+
+  const sign = generateTikTokSign({
+    path: input.path,
+    query: queryInput,
+    body: input.body,
+    contentType: "application/json",
+  });
+
+  return `${config.tiktokApiBaseUrl}${input.path}?${new URLSearchParams({
+    ...queryInput,
+    sign,
+  }).toString()}`;
+}
+
 function generateTikTokSign(input: {
   path: string;
   query: Record<string, string>;
@@ -450,4 +481,52 @@ export function verifyTikTokWebhookSignature(rawBody: string, signatureHeader: s
 
 export function parseTikTokWebhookPayload(rawBody: string) {
   return JSON.parse(rawBody) as TikTokWebhookPayload;
+}
+
+export async function updateShopWebhook(params: {
+  address: string;
+  eventType: string;
+}) {
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: unknown;
+  };
+
+  const path = "/event/202309/webhooks";
+  const body = {
+    address: params.address,
+    event_type: params.eventType,
+  };
+
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "PUT",
+    body,
+    version: "202309",
+  });
+
+  return tiktokFetchAbsolute<Response>(url, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getShopWebhooks() {
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: unknown;
+  };
+
+  const path = "/event/202309/webhooks";
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "GET",
+    version: "202309",
+  });
+
+  return tiktokFetchAbsolute<Response>(url, {
+    method: "GET",
+  });
 }

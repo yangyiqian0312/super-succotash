@@ -12,6 +12,10 @@ Minimal Next.js API project for keeping TikTok Shop inventory aligned to Shopify
   A non-technical control panel for choosing which TikTok products sync inventory and which Shopify products should become new TikTok listing requests.
 - `POST /api/mappings`
   Turns inventory sync on or off for a TikTok SKU using automatic SKU matching to Shopify.
+- `POST /api/tiktok/register-webhooks`
+  Registers TikTok shop webhooks through Event API for `ORDER_STATUS_CHANGE` and `CANCELLATION_STATUS_CHANGE`.
+- `GET /api/tiktok/webhooks`
+  Returns the current TikTok shop webhook configuration using Event API.
 - `POST /api/listings`
   Creates listing requests for Shopify variants that are not on TikTok yet.
 - `updateTikTokInventory(mapping, stock)`
