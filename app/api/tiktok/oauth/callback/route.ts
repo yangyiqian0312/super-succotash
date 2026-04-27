@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exchangeTikTokAuthCode, getAuthorizedTikTokShops } from "@/lib/tiktok";
+import { config } from "@/lib/config";
 
 function escapeHtml(value: string) {
   return value
@@ -10,7 +11,7 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-function renderEnvPage(values: Record<string, string>) {
+function renderEnvPage(values: Record<string, string>, note?: string) {
   const envText = Object.entries(values)
     .filter(([, value]) => value)
     .map(([key, value]) => `${key}=${value}`)
@@ -53,6 +54,7 @@ function renderEnvPage(values: Record<string, string>) {
       <h1>TikTok Shop connected</h1>
       <p>Update these values in Vercel Environment Variables, then redeploy the app.</p>
       <pre>${escapeHtml(envText)}</pre>
+      ${note ? `<p>${escapeHtml(note)}</p>` : ""}
       <p>Keep this page private. These values grant access to the authorized TikTok Shop.</p>
     </main>
   </body>
@@ -114,35 +116,37 @@ export async function GET(request: Request) {
     }
 
     const token = await exchangeTikTokAuthCode(authCode);
-    const shops = await getAuthorizedTikTokShops(token.accessToken);
-    const shop = shops[0];
-    const shopCipher = shop?.shop_cipher ?? shop?.cipher ?? "";
-    const shopId = shop?.shop_id ?? shop?.id ?? "";
+    let shopCipher = config.tiktokShopCipher;
+    let shopId = config.tiktokShopId;
+    let note = "";
 
-    if (!shopCipher) {
-      return new NextResponse(
-        renderErrorPage(
-          `TikTok authorization succeeded, but no shop_cipher was returned. Shops response: ${JSON.stringify(
-            shops,
-          )}`,
-        ),
-        {
-          status: 502,
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store",
-          },
-        },
-      );
+    try {
+      const shops = await getAuthorizedTikTokShops(token.accessToken);
+      const shop = shops[0];
+      shopCipher = shop?.shop_cipher ?? shop?.cipher ?? shopCipher;
+      shopId = shop?.shop_id ?? shop?.id ?? shopId;
+
+      if (!shopCipher) {
+        note = `TikTok token exchange succeeded, but no shop_cipher was returned. Shops response: ${JSON.stringify(
+          shops,
+        )}`;
+      }
+    } catch (error) {
+      note = `TikTok token exchange succeeded, but shop lookup failed. Keep your existing TIKTOK_SHOP_CIPHER/TIKTOK_SHOP_ID if they are already set. Shop lookup error: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
     }
 
     return new NextResponse(
-      renderEnvPage({
-        TIKTOK_ACCESS_TOKEN: token.accessToken,
-        TIKTOK_REFRESH_TOKEN: token.refreshToken,
-        TIKTOK_SHOP_CIPHER: shopCipher,
-        TIKTOK_SHOP_ID: shopId,
-      }),
+      renderEnvPage(
+        {
+          TIKTOK_ACCESS_TOKEN: token.accessToken,
+          TIKTOK_REFRESH_TOKEN: token.refreshToken,
+          TIKTOK_SHOP_CIPHER: shopCipher,
+          TIKTOK_SHOP_ID: shopId,
+        },
+        note,
+      ),
       {
         headers: {
           "content-type": "text/html; charset=utf-8",
