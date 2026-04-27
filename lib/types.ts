@@ -25,11 +25,21 @@ export type TikTokInventoryUpdateInput = {
 };
 
 export type TikTokWebhookPayload = {
+  type?: number;
+  tts_notification_id?: string;
+  shop_id?: string;
+  timestamp?: number;
   client_key?: string;
   event?: string;
   create_time?: number;
   user_openid?: string;
   content?: string;
+  data?: {
+    is_on_hold_order?: boolean;
+    order_id?: string;
+    order_status?: string;
+    update_time?: number;
+  };
 };
 
 export type TikTokInventoryRecord = {

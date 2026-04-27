@@ -3,7 +3,7 @@ import { hasProcessedWebhook, markWebhookProcessed } from "@/lib/idempotency-sto
 import { logger } from "@/lib/logger";
 import { adjustShopifyInventory } from "@/lib/shopify";
 import { config } from "@/lib/config";
-import { updateTikTokInventory } from "@/lib/tiktok";
+import { getTikTokOrderLines, updateTikTokInventory } from "@/lib/tiktok";
 import type { TikTokWebhookPayload } from "@/lib/types";
 
 export async function syncShopifyInventoryToTikTok(input: {
@@ -63,6 +63,11 @@ type ParsedOrderLine = {
   orderId: string;
   skuId: string;
   quantity: number;
+};
+
+type TikTokOrderWebhookContent = {
+  orderId: string | null;
+  orderStatus: string | null;
 };
 
 function normalizeWebhookContent(content: unknown) {
@@ -137,12 +142,44 @@ function extractOrderLines(content: Record<string, unknown>): ParsedOrderLine[] 
     .filter((line) => line.skuId.length > 0 && line.quantity > 0);
 }
 
-function shouldProcessTikTokOrderEvent(payload: TikTokWebhookPayload) {
-  if (!payload.event) {
-    return false;
+function extractTikTokOrderStatusPayload(payload: TikTokWebhookPayload): TikTokOrderWebhookContent {
+  const content = normalizeWebhookContent(payload.content);
+  const data = payload.data && typeof payload.data === "object" ? payload.data : {};
+
+  return {
+    orderId:
+      readString(data.order_id) ??
+      readString(content.order_id) ??
+      readString(content.shop_order_id) ??
+      readString(content.orderId),
+    orderStatus:
+      readString(data.order_status) ??
+      readString(content.order_status) ??
+      readString(content.orderStatus) ??
+      readString(payload.event),
+  };
+}
+
+function shouldProcessTikTokOrderEvent(payload: TikTokWebhookPayload, orderStatus: string | null) {
+  if (orderStatus) {
+    return true;
   }
 
-  return payload.event === config.tiktokOrderEventName;
+  return Boolean(payload.event && payload.event === config.tiktokOrderEventName);
+}
+
+function getInventoryDeltaForTikTokStatus(orderStatus: string | null) {
+  const normalized = orderStatus?.trim().toUpperCase();
+
+  if (normalized === "AWAITING_SHIPMENT") {
+    return -1;
+  }
+
+  if (normalized === "CANCEL") {
+    return 1;
+  }
+
+  return 0;
 }
 
 export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
@@ -150,9 +187,13 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
     throw new Error("TikTok client_key mismatch");
   }
 
-  if (!shouldProcessTikTokOrderEvent(payload)) {
+  const statusPayload = extractTikTokOrderStatusPayload(payload);
+
+  if (!shouldProcessTikTokOrderEvent(payload, statusPayload.orderStatus)) {
     logger.info("tiktok.webhook.ignored_event", {
       event: payload.event,
+      type: payload.type,
+      orderStatus: statusPayload.orderStatus,
     });
 
     return {
@@ -161,13 +202,34 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
     };
   }
 
+  const deltaDirection = getInventoryDeltaForTikTokStatus(statusPayload.orderStatus);
+
+  if (!statusPayload.orderId || deltaDirection === 0) {
+    logger.info("tiktok.webhook.ignored_status", {
+      event: payload.event,
+      type: payload.type,
+      orderId: statusPayload.orderId,
+      orderStatus: statusPayload.orderStatus,
+    });
+
+    return {
+      skipped: true,
+      reason: "ignored_status",
+    };
+  }
+
   const content = normalizeWebhookContent(payload.content);
-  const orderLines = extractOrderLines(content);
+  let orderLines = extractOrderLines(content);
+
+  if (orderLines.length === 0) {
+    orderLines = await getTikTokOrderLines(statusPayload.orderId);
+  }
 
   if (orderLines.length === 0) {
     logger.warn("tiktok.webhook.no_order_lines", {
       event: payload.event,
-      content,
+      orderId: statusPayload.orderId,
+      orderStatus: statusPayload.orderStatus,
     });
 
     return {
@@ -179,10 +241,21 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
   let appliedCount = 0;
 
   for (const line of orderLines) {
-    const idempotencyKey = `${payload.event}:${line.orderId}:${line.skuId}`;
+    const reserveKey = `tiktok:reserve:${line.orderId}:${line.skuId}`;
+    const releaseKey = `tiktok:release:${line.orderId}:${line.skuId}`;
+    const idempotencyKey = deltaDirection < 0 ? reserveKey : releaseKey;
+
     if (await hasProcessedWebhook(idempotencyKey)) {
       logger.info("tiktok.webhook.duplicate", {
         idempotencyKey,
+      });
+      continue;
+    }
+
+    if (deltaDirection > 0 && !(await hasProcessedWebhook(reserveKey))) {
+      logger.info("tiktok.webhook.cancel_without_prior_reserve", {
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
       });
       continue;
     }
@@ -196,20 +269,33 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
       continue;
     }
 
+    if (mapping.sync_enabled === false) {
+      logger.info("tiktok.webhook.sync_disabled", {
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
+      });
+      continue;
+    }
+
+    const availableDelta = deltaDirection * Math.abs(line.quantity);
+
     logger.info("tiktok.webhook.adjust_shopify_inventory", {
       orderId: line.orderId,
       tiktokSkuId: line.skuId,
       shopifyInventoryItemId: mapping.shopify_inventory_item_id,
       quantity: line.quantity,
+      orderStatus: statusPayload.orderStatus,
+      availableDelta,
     });
 
-    await adjustShopifyInventory(mapping.shopify_inventory_item_id, -Math.abs(line.quantity));
+    await adjustShopifyInventory(mapping.shopify_inventory_item_id, availableDelta);
     await markWebhookProcessed(idempotencyKey);
     appliedCount += 1;
   }
 
   logger.info("tiktok.webhook.completed", {
     event: payload.event,
+    orderStatus: statusPayload.orderStatus,
     appliedCount,
   });
 

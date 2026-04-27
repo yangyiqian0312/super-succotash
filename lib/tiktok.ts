@@ -381,6 +381,51 @@ export async function getAuthorizedTikTokShops(accessToken: string) {
   return data?.shops ?? data?.authorized_shops ?? data?.shop_list ?? [];
 }
 
+export async function getTikTokOrderLines(orderId: string) {
+  type TikTokOrderDetailResponse = {
+    data?: {
+      orders?: Array<{
+        id?: string;
+        line_items?: Array<{
+          sku_id?: string | number;
+          seller_sku?: string;
+          quantity?: number | string;
+          product_count?: number | string;
+        }>;
+      }>;
+    };
+  };
+
+  const accessToken = await getTikTokAccessToken();
+  const url = buildTikTokSignedUrl({
+    path: "/order/202309/orders",
+    method: "GET",
+    query: {
+      ids: orderId,
+    },
+    version: "202309",
+    accessToken,
+  });
+
+  const response = await tiktokFetchAbsolute<TikTokOrderDetailResponse>(url, {
+    method: "GET",
+  });
+  const order = response.data?.orders?.find((item) => item.id === orderId) ?? response.data?.orders?.[0];
+
+  return (order?.line_items ?? [])
+    .map((item) => {
+      const quantity = normalizeNumber(item.quantity ?? item.product_count) || 1;
+
+      return {
+        orderId,
+        skuId: normalizeText(item.sku_id, ""),
+        sellerSku: normalizeText(item.seller_sku, ""),
+        quantity,
+      };
+    })
+    .filter((line) => line.skuId.length > 0 && line.quantity > 0);
+}
+
 function generateTikTokSign(input: {
   path: string;
   query: Record<string, string>;
