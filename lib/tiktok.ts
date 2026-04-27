@@ -2,8 +2,10 @@ import { config } from "@/lib/config";
 import { readJsonFile, writeJsonFile } from "@/lib/file-store";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
-import { ClientConfiguration } from "../client/config";
-import { AccessTokenTool } from "../client/token";
+import {
+  getTikTokAccessTokenWithAuthCode,
+  refreshTikTokToken,
+} from "@/lib/tiktok-auth";
 import type {
   SkuMapping,
   TikTokInventoryRecord,
@@ -23,20 +25,6 @@ let tokenState: TikTokTokenState = {
 };
 
 let refreshPromise: Promise<string> | null = null;
-
-function configureTikTokSdk() {
-  ClientConfiguration.globalConfig.app_key = config.tiktokAppKey;
-  ClientConfiguration.globalConfig.app_secret = config.tiktokAppSecret;
-  ClientConfiguration.globalConfig.basePath = config.tiktokApiBaseUrl;
-}
-
-function parseSdkBody<T>(body: unknown): T {
-  if (typeof body === "string") {
-    return JSON.parse(body) as T;
-  }
-
-  return body as T;
-}
 
 function isTikTokAuthExpired(status: number, bodyText: string) {
   return (
@@ -58,41 +46,31 @@ async function refreshTikTokAccessToken() {
 
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      configureTikTokSdk();
-      const { response, body } = await AccessTokenTool.refreshToken(
-        tokenState.refreshToken,
-        config.tiktokAppKey,
-        config.tiktokAppSecret,
-      );
-      const payload = parseSdkBody<{
-        data?: {
-          access_token?: string;
-          refresh_token?: string;
-        };
-        access_token?: string;
-        refresh_token?: string;
-        code?: number;
-        message?: string;
-      }>(body);
+      const { statusCode, body: payload } = await refreshTikTokToken({
+        refreshToken: tokenState.refreshToken,
+        appKey: config.tiktokAppKey,
+        appSecret: config.tiktokAppSecret,
+      });
+
       logger.info("tiktok.token.refresh_response", {
-        status: response.statusCode,
+        status: statusCode,
         code: payload.code,
         message: payload.message,
-        hasAccessToken: Boolean(payload.data?.access_token ?? payload.access_token),
-        hasRefreshToken: Boolean(payload.data?.refresh_token ?? payload.refresh_token),
+        hasAccessToken: Boolean(payload.data?.access_token),
+        hasRefreshToken: Boolean(payload.data?.refresh_token),
       });
 
       if (
-        !response.statusCode ||
-        response.statusCode < 200 ||
-        response.statusCode > 299 ||
+        !statusCode ||
+        statusCode < 200 ||
+        statusCode > 299 ||
         (payload.code !== undefined && payload.code !== 0)
       ) {
         throw new Error(`TikTok token refresh failed: ${JSON.stringify(payload)}`);
       }
 
-      const accessToken = payload.data?.access_token ?? payload.access_token;
-      const refreshToken = payload.data?.refresh_token ?? payload.refresh_token;
+      const accessToken = payload.data?.access_token;
+      const refreshToken = payload.data?.refresh_token;
 
       if (!accessToken) {
         throw new Error(`TikTok token refresh missing access_token: ${JSON.stringify(payload)}`);
@@ -297,37 +275,33 @@ export async function exchangeTikTokAuthCode(authCode: string) {
       open_id?: string;
       seller_name?: string;
     };
-    access_token?: string;
-    refresh_token?: string;
   };
 
-  configureTikTokSdk();
-  const { response, body } = await AccessTokenTool.getAccessToken(
+  const { statusCode, body: payload } = await getTikTokAccessTokenWithAuthCode({
     authCode,
-    config.tiktokAppKey,
-    config.tiktokAppSecret,
-  );
-  const payload = parseSdkBody<Response>(body);
+    appKey: config.tiktokAppKey,
+    appSecret: config.tiktokAppSecret,
+  });
 
   logger.info("tiktok.oauth.exchange_response", {
-    status: response.statusCode,
+    status: statusCode,
     code: payload.code,
     message: payload.message,
-    hasAccessToken: Boolean(payload.data?.access_token ?? payload.access_token),
-    hasRefreshToken: Boolean(payload.data?.refresh_token ?? payload.refresh_token),
+    hasAccessToken: Boolean(payload.data?.access_token),
+    hasRefreshToken: Boolean(payload.data?.refresh_token),
   });
 
   if (
-    !response.statusCode ||
-    response.statusCode < 200 ||
-    response.statusCode > 299 ||
+    !statusCode ||
+    statusCode < 200 ||
+    statusCode > 299 ||
     (payload.code !== undefined && payload.code !== 0)
   ) {
     throw new Error(`TikTok auth code exchange failed: ${JSON.stringify(payload)}`);
   }
 
-  const accessToken = payload.data?.access_token ?? payload.access_token;
-  const refreshToken = payload.data?.refresh_token ?? payload.refresh_token;
+  const accessToken = payload.data?.access_token;
+  const refreshToken = payload.data?.refresh_token;
 
   if (!accessToken || !refreshToken) {
     throw new Error(`TikTok auth code exchange missing tokens: ${JSON.stringify(payload)}`);
