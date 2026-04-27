@@ -1,15 +1,29 @@
 import { listListingRequests } from "@/lib/listing-request-store";
+import { logger } from "@/lib/logger";
 import { listSkuMappings } from "@/lib/mapping-store";
 import { getShopifyConnectionStatus, listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, ListingRequest, ShopifyCatalogItem, SkuMapping, TikTokInventoryRecord } from "@/lib/types";
+
+async function safeDashboardValue<T>(label: string, loader: () => Promise<T>, fallback: T) {
+  try {
+    return await loader();
+  } catch (error) {
+    logger.error("dashboard.loader.failed", {
+      label,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return fallback;
+  }
+}
 
 export async function getDashboardData(): Promise<DashboardData> {
   const [tiktokItems, shopifyItems, mappings, listingRequests, shopifyConnection] = await Promise.all([
-    listTikTokInventoryCatalog(),
-    listShopifyCatalog(),
-    listSkuMappings(),
-    listListingRequests(),
+    safeDashboardValue<TikTokInventoryRecord[]>("tiktok.catalog", listTikTokInventoryCatalog, []),
+    safeDashboardValue<ShopifyCatalogItem[]>("shopify.catalog", listShopifyCatalog, []),
+    safeDashboardValue<SkuMapping[]>("sku.mappings", listSkuMappings, []),
+    safeDashboardValue<ListingRequest[]>("listing.requests", listListingRequests, []),
     getShopifyConnectionStatus(),
   ]);
 

@@ -1,8 +1,6 @@
 import request from "request";
 
 const authHost = "https://auth.tiktok-shops.com";
-const grantType = "authorized_code";
-
 export type TikTokTokenResponse = {
   code?: number;
   message?: string;
@@ -50,7 +48,7 @@ export async function getTikTokAccessTokenWithAuthCode(input: {
   appSecret: string;
 }) {
   return callTokenEndpoint("/api/v2/token/get", {
-    grant_type: grantType,
+    grant_type: "authorized_code",
     auth_code: input.authCode,
     app_key: input.appKey,
     app_secret: input.appSecret,
@@ -63,7 +61,7 @@ export async function refreshTikTokToken(input: {
   appSecret: string;
 }) {
   return callTokenEndpoint("/api/v2/token/refresh", {
-    grant_type: grantType,
+    grant_type: "refresh_token",
     refresh_token: input.refreshToken,
     app_key: input.appKey,
     app_secret: input.appSecret,

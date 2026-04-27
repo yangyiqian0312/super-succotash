@@ -552,6 +552,33 @@ async function getTikTokProductImage(productId: string) {
   return imageUrl;
 }
 
+type TikTokProductsSearchResponse = {
+  code?: number;
+  data?: {
+    next_page_token?: string;
+    total_count?: number;
+    products?: Array<{
+      id?: string | number;
+      title?: string;
+      status?: string;
+      main_images?: Array<{
+        urls?: string[];
+        thumb_urls?: string[];
+      }>;
+      skus?: Array<{
+        id?: string | number;
+        seller_sku?: string;
+        inventory?: Array<{
+          quantity?: number;
+        }>;
+        status_info?: {
+          status?: string;
+        };
+      }>;
+    }>;
+  };
+};
+
 export async function listTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
   if (
     (!tokenState.accessToken && !tokenState.refreshToken) ||
@@ -562,33 +589,18 @@ export async function listTikTokInventoryCatalog(): Promise<TikTokInventoryRecor
     return fallbackInventory;
   }
 
-  type TikTokProductsSearchResponse = {
-    code?: number;
-    data?: {
-      next_page_token?: string;
-      total_count?: number;
-      products?: Array<{
-        id?: string | number;
-        title?: string;
-        status?: string;
-        main_images?: Array<{
-          urls?: string[];
-          thumb_urls?: string[];
-        }>;
-        skus?: Array<{
-          id?: string | number;
-          seller_sku?: string;
-          inventory?: Array<{
-            quantity?: number;
-          }>;
-          status_info?: {
-            status?: string;
-          };
-        }>;
-      }>;
-    };
-  };
+  try {
+    return await fetchTikTokInventoryCatalog();
+  } catch (error) {
+    logger.error("tiktok.catalog.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
 
+    return fallbackInventory;
+  }
+}
+
+async function fetchTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
   const rows: TikTokInventoryRecord[] = [];
   const uniqueProductIds = new Set<string>();
   let nextPageToken = "";
