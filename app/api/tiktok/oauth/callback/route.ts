@@ -120,12 +120,19 @@ export async function GET(request: Request) {
     const shopId = shop?.shop_id ?? shop?.id ?? "";
 
     if (!shopCipher) {
-      return NextResponse.json(
+      return new NextResponse(
+        renderErrorPage(
+          `TikTok authorization succeeded, but no shop_cipher was returned. Shops response: ${JSON.stringify(
+            shops,
+          )}`,
+        ),
         {
-          error: "TikTok authorization succeeded, but no shop_cipher was returned",
-          shops,
+          status: 502,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+          },
         },
-        { status: 502 },
       );
     }
 

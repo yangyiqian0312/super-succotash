@@ -343,7 +343,7 @@ export async function getAuthorizedTikTokShops(accessToken: string) {
   };
 
   const url = buildTikTokSignedUrl({
-    path: "/authorization/202309/shops",
+    path: "/seller/202309/shops",
     method: "GET",
     version: "202309",
     accessToken,
