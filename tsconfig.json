@@ -36,6 +36,12 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "api",
+    "model",
+    "utils",
+    ".openapi-generator",
+    "api.ts",
+    "index.ts"
   ]
 }

@@ -2,7 +2,8 @@ import { config } from "@/lib/config";
 import { readJsonFile, writeJsonFile } from "@/lib/file-store";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
-import { AccessTokenTool, ClientConfiguration, TikTokShopNodeApiClient } from "../client";
+import { ClientConfiguration } from "../client/config";
+import { AccessTokenTool } from "../client/token";
 import type {
   SkuMapping,
   TikTokInventoryRecord,
@@ -367,19 +368,28 @@ export async function getAuthorizedTikTokShops(accessToken: string) {
     } | Shop[];
   };
 
-  configureTikTokSdk();
-  const client = new TikTokShopNodeApiClient({
-    config: new ClientConfiguration(
-      config.tiktokAppKey,
-      config.tiktokAppSecret,
-      config.tiktokApiBaseUrl,
-    ),
+  const result = await fetch(`${config.tiktokApiBaseUrl}/authorization/202309/shops`, {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "x-tts-access-token": accessToken,
+    },
+    cache: "no-store",
   });
-  const { body } = await client.api.AuthorizationV202309Api.ShopsGet(
-    accessToken,
-    "application/json",
-  );
-  const response = parseSdkBody<Response>(body);
+  const bodyText = await result.text();
+  const response = bodyText ? (JSON.parse(bodyText) as Response) : {};
+
+  logger.info("tiktok.oauth.shops_response", {
+    status: result.status,
+    code: response.code,
+    message: response.message,
+  });
+
+  if (!result.ok || (response.code !== undefined && response.code !== 0)) {
+    throw new Error(`TikTok authorized shops failed: ${bodyText}`);
+  }
+
   const data = response.data;
 
   if (Array.isArray(data)) {
