@@ -342,7 +342,15 @@ export async function getAuthorizedTikTokShops(accessToken: string) {
     } | Shop[];
   };
 
-  const result = await fetch(`${config.tiktokApiBaseUrl}/authorization/202309/shops`, {
+  const url = buildTikTokSignedUrl({
+    path: "/authorization/202309/shops",
+    method: "GET",
+    version: "202309",
+    accessToken,
+    includeShopCipher: false,
+    includeShopId: false,
+  });
+  const result = await fetch(url, {
     method: "GET",
     headers: {
       accept: "application/json",
