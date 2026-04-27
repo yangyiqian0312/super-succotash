@@ -1,6 +1,8 @@
 export const config = {
   tiktokApiBaseUrl:
     process.env.TIKTOK_API_BASE_URL ?? "https://open-api.tiktokglobalshop.com",
+  tiktokAuthBaseUrl:
+    process.env.TIKTOK_AUTH_BASE_URL ?? "https://auth.tiktok-shops.com",
   tiktokAccessToken: process.env.TIKTOK_ACCESS_TOKEN ?? "",
   tiktokRefreshToken: process.env.TIKTOK_REFRESH_TOKEN ?? "",
   tiktokAppSecret: process.env.TIKTOK_APP_SECRET ?? "",

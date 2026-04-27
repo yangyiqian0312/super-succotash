@@ -42,20 +42,20 @@ async function refreshTikTokAccessToken() {
 
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      const url = `${config.tiktokApiBaseUrl}/api/token/refreshToken`;
+      const url = `${config.tiktokAuthBaseUrl}/api/v2/token/refresh`;
       logger.info("tiktok.token.refresh", { url });
 
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "content-type": "application/json",
+          "content-type": "application/x-www-form-urlencoded",
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           app_key: config.tiktokAppKey,
           app_secret: config.tiktokAppSecret,
           refresh_token: tokenState.refreshToken,
           grant_type: "refresh_token",
-        }),
+        }).toString(),
         cache: "no-store",
       });
 
@@ -294,18 +294,18 @@ export async function exchangeTikTokAuthCode(authCode: string) {
     refresh_token?: string;
   };
 
-  const url = `${config.tiktokApiBaseUrl}/api/token/getAccessToken`;
+  const url = `${config.tiktokAuthBaseUrl}/api/v2/token/get`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/x-www-form-urlencoded",
     },
-    body: JSON.stringify({
+    body: new URLSearchParams({
       app_key: config.tiktokAppKey,
       app_secret: config.tiktokAppSecret,
       grant_type: "authorized_code",
       auth_code: authCode,
-    }),
+    }).toString(),
     cache: "no-store",
   });
 

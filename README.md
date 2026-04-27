@@ -41,6 +41,7 @@ Copy `.env.example` into `.env.local` and fill in:
 
 - `TIKTOK_ACCESS_TOKEN`
 - `TIKTOK_REFRESH_TOKEN`
+- `TIKTOK_AUTH_BASE_URL`
 - `TIKTOK_CLIENT_KEY`
 - `TIKTOK_CLIENT_SECRET`
 - `TIKTOK_APP_KEY`
@@ -78,6 +79,6 @@ npm run dev
 - Existing TikTok products can be enabled for sync when `seller_sku` matches a Shopify variant `sku`.
 - The TikTok dashboard tab now parses the real `products/search` response shape with `data.products[]`, `data.next_page_token`, `skus[]`, and summed SKU inventory quantities.
 - Product search request signing is generated automatically with TikTok's HMAC-SHA256 rules using `TIKTOK_APP_SECRET`.
-- TikTok API calls refresh `TIKTOK_ACCESS_TOKEN` automatically when TikTok returns an expired-token 401, using `TIKTOK_REFRESH_TOKEN`, `TIKTOK_APP_KEY`, and `TIKTOK_APP_SECRET`. For Vercel, keep `TIKTOK_REFRESH_TOKEN` in environment variables or move token storage to a persistent database/KV if TikTok rotates refresh tokens for your app.
+- TikTok API calls refresh `TIKTOK_ACCESS_TOKEN` automatically when TikTok returns an expired-token 401, using `TIKTOK_REFRESH_TOKEN`, `TIKTOK_APP_KEY`, and `TIKTOK_APP_SECRET`. OAuth token exchange uses `TIKTOK_AUTH_BASE_URL`, defaulting to `https://auth.tiktok-shops.com`. For Vercel, keep `TIKTOK_REFRESH_TOKEN` in environment variables or move token storage to a persistent database/KV if TikTok rotates refresh tokens for your app.
 - Shopify now uses the client credentials grant for stores you own. The dashboard exchanges `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` for a short-lived Admin access token and caches it in memory before calling the Admin API.
 - New TikTok listings are queued as `needs_details` requests because TikTok product creation normally requires category-specific attributes that cannot be inferred safely from generic Shopify product data alone.
