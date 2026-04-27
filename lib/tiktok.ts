@@ -2,6 +2,7 @@ import { config } from "@/lib/config";
 import { readJsonFile, writeJsonFile } from "@/lib/file-store";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
+import { AccessTokenTool, ClientConfiguration, TikTokShopNodeApiClient } from "../client";
 import type {
   SkuMapping,
   TikTokInventoryRecord,
@@ -21,6 +22,20 @@ let tokenState: TikTokTokenState = {
 };
 
 let refreshPromise: Promise<string> | null = null;
+
+function configureTikTokSdk() {
+  ClientConfiguration.globalConfig.app_key = config.tiktokAppKey;
+  ClientConfiguration.globalConfig.app_secret = config.tiktokAppSecret;
+  ClientConfiguration.globalConfig.basePath = config.tiktokApiBaseUrl;
+}
+
+function parseSdkBody<T>(body: unknown): T {
+  if (typeof body === "string") {
+    return JSON.parse(body) as T;
+  }
+
+  return body as T;
+}
 
 function isTikTokAuthExpired(status: number, bodyText: string) {
   return (
@@ -42,53 +57,44 @@ async function refreshTikTokAccessToken() {
 
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      const url = `${config.tiktokAuthBaseUrl}/api/v2/token/refresh`;
-      logger.info("tiktok.token.refresh", { url });
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          app_key: config.tiktokAppKey,
-          app_secret: config.tiktokAppSecret,
-          refresh_token: tokenState.refreshToken,
-          grant_type: "refresh_token",
-        }).toString(),
-        cache: "no-store",
-      });
-
-      const bodyText = await response.text();
-      let payload: {
+      configureTikTokSdk();
+      const { response, body } = await AccessTokenTool.refreshToken(
+        tokenState.refreshToken,
+        config.tiktokAppKey,
+        config.tiktokAppSecret,
+      );
+      const payload = parseSdkBody<{
         data?: {
           access_token?: string;
           refresh_token?: string;
         };
         access_token?: string;
         refresh_token?: string;
-      } = {};
-
-      try {
-        payload = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        payload = {};
-      }
+        code?: number;
+        message?: string;
+      }>(body);
       logger.info("tiktok.token.refresh_response", {
-        status: response.status,
+        status: response.statusCode,
+        code: payload.code,
+        message: payload.message,
         hasAccessToken: Boolean(payload.data?.access_token ?? payload.access_token),
         hasRefreshToken: Boolean(payload.data?.refresh_token ?? payload.refresh_token),
       });
 
-      if (!response.ok) {
-        throw new Error(`TikTok token refresh ${response.status}: ${bodyText}`);
+      if (
+        !response.statusCode ||
+        response.statusCode < 200 ||
+        response.statusCode > 299 ||
+        (payload.code !== undefined && payload.code !== 0)
+      ) {
+        throw new Error(`TikTok token refresh failed: ${JSON.stringify(payload)}`);
       }
 
       const accessToken = payload.data?.access_token ?? payload.access_token;
       const refreshToken = payload.data?.refresh_token ?? payload.refresh_token;
 
       if (!accessToken) {
-        throw new Error(`TikTok token refresh missing access_token: ${bodyText}`);
+        throw new Error(`TikTok token refresh missing access_token: ${JSON.stringify(payload)}`);
       }
 
       tokenState = {
@@ -294,47 +300,36 @@ export async function exchangeTikTokAuthCode(authCode: string) {
     refresh_token?: string;
   };
 
-  const url = `${config.tiktokAuthBaseUrl}/api/v2/token/get`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      app_key: config.tiktokAppKey,
-      app_secret: config.tiktokAppSecret,
-      grant_type: "authorized_code",
-      auth_code: authCode,
-    }).toString(),
-    cache: "no-store",
-  });
-
-  const bodyText = await response.text();
-  let payload: Response = {};
-
-  try {
-    payload = bodyText ? JSON.parse(bodyText) : {};
-  } catch {
-    payload = {};
-  }
+  configureTikTokSdk();
+  const { response, body } = await AccessTokenTool.getAccessToken(
+    authCode,
+    config.tiktokAppKey,
+    config.tiktokAppSecret,
+  );
+  const payload = parseSdkBody<Response>(body);
 
   logger.info("tiktok.oauth.exchange_response", {
-    status: response.status,
+    status: response.statusCode,
     code: payload.code,
     message: payload.message,
     hasAccessToken: Boolean(payload.data?.access_token ?? payload.access_token),
     hasRefreshToken: Boolean(payload.data?.refresh_token ?? payload.refresh_token),
   });
 
-  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
-    throw new Error(`TikTok auth code exchange failed: ${bodyText}`);
+  if (
+    !response.statusCode ||
+    response.statusCode < 200 ||
+    response.statusCode > 299 ||
+    (payload.code !== undefined && payload.code !== 0)
+  ) {
+    throw new Error(`TikTok auth code exchange failed: ${JSON.stringify(payload)}`);
   }
 
   const accessToken = payload.data?.access_token ?? payload.access_token;
   const refreshToken = payload.data?.refresh_token ?? payload.refresh_token;
 
   if (!accessToken || !refreshToken) {
-    throw new Error(`TikTok auth code exchange missing tokens: ${bodyText}`);
+    throw new Error(`TikTok auth code exchange missing tokens: ${JSON.stringify(payload)}`);
   }
 
   tokenState = {
@@ -372,17 +367,19 @@ export async function getAuthorizedTikTokShops(accessToken: string) {
     } | Shop[];
   };
 
-  const url = buildTikTokSignedUrl({
-    path: "/authorization/202309/shops",
-    method: "GET",
-    version: "202309",
+  configureTikTokSdk();
+  const client = new TikTokShopNodeApiClient({
+    config: new ClientConfiguration(
+      config.tiktokAppKey,
+      config.tiktokAppSecret,
+      config.tiktokApiBaseUrl,
+    ),
+  });
+  const { body } = await client.api.AuthorizationV202309Api.ShopsGet(
     accessToken,
-    includeShopCipher: false,
-    includeShopId: false,
-  });
-  const response = await tiktokFetchAbsolute<Response>(url, {
-    method: "GET",
-  });
+    "application/json",
+  );
+  const response = parseSdkBody<Response>(body);
   const data = response.data;
 
   if (Array.isArray(data)) {

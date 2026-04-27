@@ -16,6 +16,8 @@ Minimal Next.js API project for keeping TikTok Shop inventory aligned to Shopify
   Registers TikTok shop webhooks through Event API for `ORDER_STATUS_CHANGE` and `CANCELLATION_STATUS_CHANGE`.
 - `GET /api/tiktok/webhooks`
   Returns the current TikTok shop webhook configuration using Event API.
+- `GET /api/tiktok/oauth/callback`
+  Receives the TikTok Shop authorization callback, exchanges the authorization code for tokens, and retrieves the authorized shop cipher.
 - `POST /api/listings`
   Creates listing requests for Shopify variants that are not on TikTok yet.
 - `updateTikTokInventory(mapping, stock)`
@@ -39,15 +41,20 @@ stock = max(0, shopifyStock - buffer)
 
 Copy `.env.example` into `.env.local` and fill in:
 
+- `TIKTOK_API_BASE_URL`
+- `TIKTOK_AUTH_BASE_URL`
 - `TIKTOK_ACCESS_TOKEN`
 - `TIKTOK_REFRESH_TOKEN`
-- `TIKTOK_AUTH_BASE_URL`
 - `TIKTOK_CLIENT_KEY`
 - `TIKTOK_CLIENT_SECRET`
+- `TIKTOK_ORDER_EVENT_NAME`
+- `TIKTOK_MERCHANT_ID`
 - `TIKTOK_APP_KEY`
 - `TIKTOK_APP_SECRET`
 - `TIKTOK_SHOP_CIPHER`
 - `TIKTOK_SHOP_ID`
+- `TIKTOK_API_VERSION`
+- `TIKTOK_SEARCH_PRODUCTS_PATH`
 - `SHOPIFY_STORE_DOMAIN`
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
@@ -55,6 +62,7 @@ Copy `.env.example` into `.env.local` and fill in:
 - `SHOPIFY_ADMIN_ACCESS_TOKEN`
 - `SHOPIFY_LOCATION_ID`
 - `SHOPIFY_WEBHOOK_SECRET` if you want webhook signature verification
+- `DEFAULT_BUFFER_QUANTITY`
 
 ## Start
 
@@ -62,6 +70,27 @@ Copy `.env.example` into `.env.local` and fill in:
 npm install
 npm run dev
 ```
+
+## TikTok authorization
+
+Configure the TikTok Shop app redirect URL as:
+
+```txt
+https://your-domain.example/api/tiktok/oauth/callback
+```
+
+After a seller authorizes the app, the callback exchanges the authorization code with TikTok's Node SDK, calls Get Authorized Shops, and displays the values needed for Vercel environment variables:
+
+```env
+TIKTOK_ACCESS_TOKEN=
+TIKTOK_REFRESH_TOKEN=
+TIKTOK_SHOP_CIPHER=
+TIKTOK_SHOP_ID=
+```
+
+TikTok API calls refresh `TIKTOK_ACCESS_TOKEN` automatically when TikTok returns an expired-token 401, using `TIKTOK_REFRESH_TOKEN`, `TIKTOK_APP_KEY`, and `TIKTOK_APP_SECRET`.
+
+For Vercel, keep `TIKTOK_REFRESH_TOKEN` in environment variables for this MVP. For production, move token storage to a persistent database or KV store if TikTok rotates refresh tokens for your app.
 
 ## TikTok webhook behavior
 
@@ -77,8 +106,7 @@ npm run dev
 - A simple retry wrapper is used for TikTok and Shopify requests.
 - The TikTok order webhook parser supports common order payload shapes, but you should align `TIKTOK_ORDER_EVENT_NAME` and the `content` shape to your exact TikTok Shop event payload.
 - Existing TikTok products can be enabled for sync when `seller_sku` matches a Shopify variant `sku`.
-- The TikTok dashboard tab now parses the real `products/search` response shape with `data.products[]`, `data.next_page_token`, `skus[]`, and summed SKU inventory quantities.
+- The TikTok dashboard tab parses the real `products/search` response shape with `data.products[]`, `data.next_page_token`, `skus[]`, and summed SKU inventory quantities.
 - Product search request signing is generated automatically with TikTok's HMAC-SHA256 rules using `TIKTOK_APP_SECRET`.
-- TikTok API calls refresh `TIKTOK_ACCESS_TOKEN` automatically when TikTok returns an expired-token 401, using `TIKTOK_REFRESH_TOKEN`, `TIKTOK_APP_KEY`, and `TIKTOK_APP_SECRET`. OAuth token exchange uses `TIKTOK_AUTH_BASE_URL`, defaulting to `https://auth.tiktok-shops.com`. For Vercel, keep `TIKTOK_REFRESH_TOKEN` in environment variables or move token storage to a persistent database/KV if TikTok rotates refresh tokens for your app.
-- Shopify now uses the client credentials grant for stores you own. The dashboard exchanges `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` for a short-lived Admin access token and caches it in memory before calling the Admin API.
+- Shopify uses the client credentials grant for stores you own. The dashboard exchanges `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` for a short-lived Admin access token and caches it in memory before calling the Admin API.
 - New TikTok listings are queued as `needs_details` requests because TikTok product creation normally requires category-specific attributes that cannot be inferred safely from generic Shopify product data alone.
