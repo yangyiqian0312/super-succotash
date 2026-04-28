@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS sku_mappings (
   buffer_quantity INTEGER NOT NULL DEFAULT 2,
   sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   product_sync_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+  price_sync_percent NUMERIC NOT NULL DEFAULT 100,
   tiktok_seller_sku TEXT,
   shopify_product_title TEXT,
   shopify_variant_title TEXT,

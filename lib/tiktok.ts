@@ -511,7 +511,11 @@ export async function updateTikTokProductFromShopify(
   }
 
   if (fields.includes("price")) {
-    const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
+    const shopifyPrice = item.price && Number.isFinite(Number(item.price)) ? Number(item.price) : 1;
+    const pricePercent = Number.isFinite(mapping.price_sync_percent)
+      ? mapping.price_sync_percent ?? 100
+      : 100;
+    const price = Math.max(0, (shopifyPrice * pricePercent) / 100).toFixed(2);
     const detailSku = await getTikTokProductSkuDetail(
       mapping.tiktok_product_id,
       mapping.tiktok_sku_id,

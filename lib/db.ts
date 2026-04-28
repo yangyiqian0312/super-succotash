@@ -41,11 +41,17 @@ export async function ensureSchema() {
         buffer_quantity INTEGER NOT NULL DEFAULT 2,
         sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
         product_sync_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+        price_sync_percent NUMERIC NOT NULL DEFAULT 100,
         tiktok_seller_sku TEXT,
         shopify_product_title TEXT,
         shopify_variant_title TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `;
+
+    await runSchema`
+      ALTER TABLE sku_mappings
+      ADD COLUMN IF NOT EXISTS price_sync_percent NUMERIC NOT NULL DEFAULT 100
     `;
 
     await runSchema`

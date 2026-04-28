@@ -10,6 +10,7 @@ export type SkuMapping = {
   buffer_quantity: number;
   sync_enabled?: boolean;
   product_sync_fields?: ProductSyncField[];
+  price_sync_percent?: number;
   tiktok_seller_sku?: string;
   shopify_product_title?: string;
   shopify_variant_title?: string;

@@ -175,6 +175,7 @@ export async function syncShopifyProductUpdateToTikTok(input: {
       tiktokProductId: mapping.tiktok_product_id,
       shopifyVariantId: mapping.shopify_variant_id,
       productSyncFields: mapping.product_sync_fields ?? [],
+      priceSyncPercent: mapping.price_sync_percent ?? 100,
       ...(await syncMappedProductFields(mapping, shopifyItem)),
     });
   }

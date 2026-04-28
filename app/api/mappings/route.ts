@@ -28,12 +28,22 @@ function parseProductSyncFields(fields: unknown): ProductSyncField[] {
   return fields.filter((field): field is ProductSyncField => productSyncFields.has(field));
 }
 
+function parsePriceSyncPercent(value: unknown) {
+  const percent = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(percent) || percent <= 0) {
+    return 100;
+  }
+
+  return Math.min(1000, Math.max(1, percent));
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       tiktokSkuId?: string;
       syncEnabled?: boolean;
       productSyncFields?: ProductSyncField[];
+      priceSyncPercent?: number;
     };
 
     if (!body.tiktokSkuId || typeof body.syncEnabled !== "boolean") {
@@ -47,6 +57,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const priceSyncPercent = parsePriceSyncPercent(body.priceSyncPercent);
 
     const [tiktokItems, shopifyItems] = await Promise.all([
       listTikTokInventoryCatalog(),
@@ -94,7 +105,7 @@ export async function POST(request: Request) {
     }
 
     if (body.syncEnabled) {
-      await setMappingProductSyncFields(body.tiktokSkuId, fields);
+      await setMappingProductSyncFields(body.tiktokSkuId, fields, priceSyncPercent);
     }
 
     const data = await getDashboardData();

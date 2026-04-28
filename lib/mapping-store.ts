@@ -20,6 +20,7 @@ type SkuMappingRow = {
   buffer_quantity: number;
   sync_enabled: boolean;
   product_sync_fields: ProductSyncField[] | string | null;
+  price_sync_percent: number | string | null;
   tiktok_seller_sku: string | null;
   shopify_product_title: string | null;
   shopify_variant_title: string | null;
@@ -54,6 +55,7 @@ function rowToMapping(row: SkuMappingRow): SkuMapping {
     buffer_quantity: row.buffer_quantity,
     sync_enabled: row.sync_enabled,
     product_sync_fields: normalizeProductSyncFields(row.product_sync_fields),
+    price_sync_percent: Number(row.price_sync_percent ?? 100),
     tiktok_seller_sku: row.tiktok_seller_sku ?? undefined,
     shopify_product_title: row.shopify_product_title ?? undefined,
     shopify_variant_title: row.shopify_variant_title ?? undefined,
@@ -108,6 +110,7 @@ async function saveSkuMapping(mapping: SkuMapping) {
       buffer_quantity,
       sync_enabled,
       product_sync_fields,
+      price_sync_percent,
       tiktok_seller_sku,
       shopify_product_title,
       shopify_variant_title,
@@ -123,6 +126,7 @@ async function saveSkuMapping(mapping: SkuMapping) {
       ${mapping.buffer_quantity},
       ${mapping.sync_enabled ?? false},
       ${JSON.stringify(mapping.product_sync_fields ?? [])}::jsonb,
+      ${mapping.price_sync_percent ?? 100},
       ${mapping.tiktok_seller_sku ?? null},
       ${mapping.shopify_product_title ?? null},
       ${mapping.shopify_variant_title ?? null},
@@ -137,6 +141,7 @@ async function saveSkuMapping(mapping: SkuMapping) {
       buffer_quantity = EXCLUDED.buffer_quantity,
       sync_enabled = EXCLUDED.sync_enabled,
       product_sync_fields = EXCLUDED.product_sync_fields,
+      price_sync_percent = EXCLUDED.price_sync_percent,
       tiktok_seller_sku = EXCLUDED.tiktok_seller_sku,
       shopify_product_title = EXCLUDED.shopify_product_title,
       shopify_variant_title = EXCLUDED.shopify_variant_title,
@@ -222,6 +227,7 @@ export async function upsertSkuMapping(
       ...nextMapping,
       buffer_quantity: mappings[index].buffer_quantity ?? config.defaultBufferQuantity,
       product_sync_fields: mappings[index].product_sync_fields ?? nextMapping.product_sync_fields,
+      price_sync_percent: mappings[index].price_sync_percent ?? nextMapping.price_sync_percent,
     };
   } else {
     mappings.push(nextMapping);
@@ -277,6 +283,7 @@ export async function setMappingSyncEnabled(tiktokSkuId: string, syncEnabled: bo
 export async function setMappingProductSyncFields(
   tiktokSkuId: string,
   productSyncFields: ProductSyncField[],
+  priceSyncPercent: number,
 ) {
   const mappings = await loadMappings();
   const nextMappings = mappings.map((mapping) =>
@@ -284,6 +291,7 @@ export async function setMappingProductSyncFields(
       ? {
           ...mapping,
           product_sync_fields: productSyncFields,
+          price_sync_percent: priceSyncPercent,
         }
       : mapping,
   );

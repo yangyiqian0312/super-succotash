@@ -19,6 +19,7 @@ export async function GET() {
       shopifyVariantId: mapping.shopify_variant_id,
       syncEnabled: mapping.sync_enabled ?? false,
       productSyncFields: mapping.product_sync_fields ?? [],
+      priceSyncPercent: mapping.price_sync_percent ?? 100,
       internalSku: mapping.internal_sku,
     }));
   } catch (error) {
