@@ -657,6 +657,52 @@ export async function createTikTokDraftListing(item: ShopifyCatalogItem) {
   };
 }
 
+export async function searchTikTokCategories(keyword: string) {
+  type Category = {
+    id?: string | number;
+    category_id?: string | number;
+    local_name?: string;
+    name?: string;
+    parent_id?: string | number;
+    is_leaf?: boolean;
+    permission_statuses?: string[] | string;
+  };
+
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: {
+      categories?: Category[];
+      category_list?: Category[];
+    } | Category[];
+  };
+
+  const path = "/product/202309/categories";
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "GET",
+    query: {
+      keyword,
+    },
+    version: "202309",
+    accessToken: await getTikTokAccessToken(),
+  });
+
+  const response = await tiktokFetchAbsolute<Response>(url, {
+    method: "GET",
+  });
+
+  if (response.code !== undefined && response.code !== 0) {
+    throw new Error(`TikTok category lookup failed: ${JSON.stringify(response)}`);
+  }
+
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return response.data?.categories ?? response.data?.category_list ?? [];
+}
+
 const fallbackInventory: TikTokInventoryRecord[] = [
   {
     productId: "17293822501",
