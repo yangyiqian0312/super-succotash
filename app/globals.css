@@ -205,8 +205,45 @@ input {
 }
 
 .catalog-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
   align-self: center;
+}
+
+.field-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.field-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.field-choice:has(input:checked) {
+  color: var(--accent-strong);
+  background: rgba(31, 122, 92, 0.1);
+}
+
+.queue-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .catalog-badge,
@@ -272,6 +309,24 @@ input {
   text-decoration: none;
 }
 
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(31, 122, 92, 0.25);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--accent-strong);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .primary-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -311,6 +366,17 @@ input {
 
   .panel-header h2 {
     max-width: none;
+  }
+
+  .catalog-action,
+  .field-picker {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .queue-actions {
+    align-items: flex-start;
+    margin-left: 0;
   }
 }
 .shop-chip {

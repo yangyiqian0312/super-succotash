@@ -11,6 +11,11 @@ export async function listListingRequests() {
   return loadRequests();
 }
 
+export async function findListingRequestById(id: string) {
+  const requests = await loadRequests();
+  return requests.find((request) => request.id === id) ?? null;
+}
+
 export async function createListingRequests(items: ShopifyCatalogItem[]) {
   const current = await loadRequests();
   const now = new Date().toISOString();
@@ -72,4 +77,29 @@ export async function createOrUpdateListingRequest(params: {
 
   await writeJsonFile(FILE_NAME, next);
   return next;
+}
+
+export async function updateListingRequestStatus(params: {
+  id: string;
+  status: ListingRequest["status"];
+  tiktokProductId?: string;
+  error?: string;
+}) {
+  const current = await loadRequests();
+  const index = current.findIndex((request) => request.id === params.id);
+
+  if (index < 0) {
+    throw new Error("Listing request not found");
+  }
+
+  const next = [...current];
+  next[index] = {
+    ...next[index],
+    status: params.status,
+    tiktokProductId: params.tiktokProductId ?? next[index].tiktokProductId,
+    error: params.error,
+  };
+
+  await writeJsonFile(FILE_NAME, next);
+  return next[index];
 }

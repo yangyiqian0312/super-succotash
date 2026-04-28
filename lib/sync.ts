@@ -1,10 +1,20 @@
-import { findMappingByShopifyInventoryItemId, findMappingByTikTokSkuId, getBufferQuantity } from "@/lib/mapping-store";
+import {
+  findMappingByShopifyInventoryItemId,
+  findMappingByTikTokSkuId,
+  getBufferQuantity,
+  listSkuMappings,
+} from "@/lib/mapping-store";
 import { hasProcessedWebhook, markWebhookProcessed } from "@/lib/idempotency-store";
 import { logger } from "@/lib/logger";
 import { adjustShopifyInventory } from "@/lib/shopify";
 import { config } from "@/lib/config";
-import { getTikTokOrderLines, updateTikTokInventory } from "@/lib/tiktok";
-import type { TikTokWebhookPayload } from "@/lib/types";
+import {
+  getTikTokOrderLines,
+  updateTikTokInventory,
+  updateTikTokProductFromShopify,
+} from "@/lib/tiktok";
+import type { ShopifyCatalogItem, TikTokWebhookPayload } from "@/lib/types";
+import type { ProductSyncField, SkuMapping } from "@/lib/types";
 
 export async function syncShopifyInventoryToTikTok(input: {
   shopifyInventoryItemId: string;
@@ -59,9 +69,126 @@ export async function syncShopifyInventoryToTikTok(input: {
   };
 }
 
+export async function syncShopifyProductToTikTok(input: {
+  tiktokSkuId: string;
+  shopifyItems: ShopifyCatalogItem[];
+  fields?: ProductSyncField[];
+}) {
+  const mappings = await listSkuMappings();
+  const mapping = mappings.find((item) => item.tiktok_sku_id === input.tiktokSkuId);
+
+  if (!mapping) {
+    throw new Error("No Shopify mapping found for this TikTok SKU");
+  }
+
+  if (mapping.sync_enabled === false) {
+    throw new Error("Inventory sync is off for this product. Turn Sync on before product sync.");
+  }
+
+  const shopifyItem = input.shopifyItems.find(
+    (item) => item.variantId === mapping.shopify_variant_id,
+  );
+
+  if (!shopifyItem) {
+    throw new Error("Shopify product not found for this mapping");
+  }
+
+  const fields = input.fields ?? mapping.product_sync_fields ?? [];
+  const productResponse = await updateTikTokProductFromShopify(mapping, shopifyItem, fields);
+  const inventoryResponse = await syncShopifyInventoryToTikTok({
+    shopifyInventoryItemId: shopifyItem.inventoryItemId,
+    available: shopifyItem.inventoryQuantity,
+  });
+
+  logger.info("product.sync.completed", {
+    tiktokSkuId: mapping.tiktok_sku_id,
+    tiktokProductId: mapping.tiktok_product_id,
+    shopifyVariantId: mapping.shopify_variant_id,
+  });
+
+  return {
+    productResponse,
+    inventoryResponse,
+  };
+}
+
+function idsReferToSameShopifyResource(left: string | undefined, right: string | number | undefined) {
+  if (!left || right === undefined) {
+    return false;
+  }
+
+  const rightValue = String(right);
+  return left === rightValue || left.endsWith(`/${rightValue}`);
+}
+
+async function syncMappedProductFields(mapping: SkuMapping, shopifyItem: ShopifyCatalogItem) {
+  const fields = mapping.product_sync_fields ?? [];
+
+  if (fields.length === 0 || mapping.sync_enabled === false) {
+    return {
+      skipped: true,
+      reason: fields.length === 0 ? "no_product_fields_selected" : "sync_disabled",
+    };
+  }
+
+  const productResponse = await updateTikTokProductFromShopify(mapping, shopifyItem, fields);
+  return {
+    skipped: false,
+    productResponse,
+  };
+}
+
+export async function syncShopifyProductUpdateToTikTok(input: {
+  shopifyProductId?: string | number;
+  shopifyVariantIds?: Array<string | number>;
+  shopifyItems: ShopifyCatalogItem[];
+}) {
+  const mappings = await listSkuMappings();
+  const variantIds = input.shopifyVariantIds ?? [];
+  const results = [];
+
+  for (const mapping of mappings) {
+    const shopifyItem = input.shopifyItems.find((item) => {
+      const productMatches =
+        idsReferToSameShopifyResource(item.productId, input.shopifyProductId) ||
+        idsReferToSameShopifyResource(mapping.shopify_product_id, input.shopifyProductId);
+      const variantMatches =
+        variantIds.length > 0 &&
+        variantIds.some(
+          (variantId) =>
+            idsReferToSameShopifyResource(item.variantId, variantId) ||
+            idsReferToSameShopifyResource(mapping.shopify_variant_id, variantId),
+        );
+
+      return (
+        item.variantId === mapping.shopify_variant_id &&
+        (productMatches || variantMatches)
+      );
+    });
+
+    if (!shopifyItem) {
+      continue;
+    }
+
+    results.push({
+      tiktokSkuId: mapping.tiktok_sku_id,
+      ...(await syncMappedProductFields(mapping, shopifyItem)),
+    });
+  }
+
+  logger.info("shopify.product_update.sync.completed", {
+    shopifyProductId: input.shopifyProductId,
+    appliedCount: results.filter((result) => !result.skipped).length,
+    resultCount: results.length,
+  });
+
+  return results;
+}
+
 type ParsedOrderLine = {
   orderId: string;
   skuId: string;
+  sellerSku: string;
   quantity: number;
 };
 
@@ -130,8 +257,11 @@ function extractOrderLines(content: Record<string, unknown>): ParsedOrderLine[] 
       orderId,
       skuId:
         readString(item.sku_id) ??
-        readString(item.seller_sku) ??
         readString(item.skuId) ??
+        "",
+      sellerSku:
+        readString(item.seller_sku) ??
+        readString(item.sellerSku) ??
         "",
       quantity:
         readNumber(item.quantity) ??
@@ -139,7 +269,7 @@ function extractOrderLines(content: Record<string, unknown>): ParsedOrderLine[] 
         readNumber(item.product_count) ??
         0,
     }))
-    .filter((line) => line.skuId.length > 0 && line.quantity > 0);
+    .filter((line) => (line.skuId.length > 0 || line.sellerSku.length > 0) && line.quantity > 0);
 }
 
 function extractTikTokOrderStatusPayload(payload: TikTokWebhookPayload): TikTokOrderWebhookContent {
@@ -169,17 +299,40 @@ function shouldProcessTikTokOrderEvent(payload: TikTokWebhookPayload, orderStatu
 }
 
 function getInventoryDeltaForTikTokStatus(orderStatus: string | null) {
-  const normalized = orderStatus?.trim().toUpperCase();
+  const normalized = orderStatus?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-  if (normalized === "AWAITING_SHIPMENT") {
+  if (normalized === "AWAITINGSHIPMENT" || normalized === "AWAITSHIPMENT") {
     return -1;
   }
 
-  if (normalized === "CANCEL") {
+  if (normalized === "CANCEL" || normalized === "CANCELLED" || normalized === "CANCELED") {
     return 1;
   }
 
   return 0;
+}
+
+async function findOrderLineMapping(line: ParsedOrderLine) {
+  if (line.skuId) {
+    const bySkuId = await findMappingByTikTokSkuId(line.skuId);
+    if (bySkuId) {
+      return bySkuId;
+    }
+  }
+
+  if (!line.sellerSku) {
+    return null;
+  }
+
+  const sellerSku = line.sellerSku.trim().toLowerCase();
+  const mappings = await listSkuMappings();
+  return (
+    mappings.find(
+      (mapping) =>
+        mapping.tiktok_seller_sku?.trim().toLowerCase() === sellerSku ||
+        mapping.internal_sku.trim().toLowerCase() === sellerSku,
+    ) ?? null
+  );
 }
 
 export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
@@ -260,11 +413,12 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
       continue;
     }
 
-    const mapping = await findMappingByTikTokSkuId(line.skuId);
+    const mapping = await findOrderLineMapping(line);
     if (!mapping) {
       logger.warn("tiktok.webhook.mapping_not_found", {
         orderId: line.orderId,
         tiktokSkuId: line.skuId,
+        sellerSku: line.sellerSku,
       });
       continue;
     }

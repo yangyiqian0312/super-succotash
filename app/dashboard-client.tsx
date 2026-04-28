@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState, useTransition } from "react";
-import type { DashboardData, ShopifyCatalogItem } from "@/lib/types";
+import type { DashboardData, ProductSyncField, ShopifyCatalogItem } from "@/lib/types";
 
 type Props = {
   initialData: DashboardData;
@@ -27,12 +27,23 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return payload;
 }
 
+const productFieldOptions: Array<{ field: ProductSyncField; label: string }> = [
+  { field: "name", label: "Name" },
+  { field: "price", label: "Price" },
+  { field: "description", label: "Description" },
+  { field: "image", label: "Image" },
+];
+
 export default function DashboardClient({ initialData, initialNotice }: Props) {
   const [data, setData] = useState(initialData);
   const [search, setSearch] = useState("");
   const [selectedShopifyIds, setSelectedShopifyIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<string>(initialNotice ?? "Ready");
   const [activeTab, setActiveTab] = useState<"tiktok" | "shopify">("tiktok");
+  const [activeFieldPickerSkuId, setActiveFieldPickerSkuId] = useState<string | null>(null);
+  const [productFieldDrafts, setProductFieldDrafts] = useState<Record<string, ProductSyncField[]>>(
+    {},
+  );
   const [isPending, startTransition] = useTransition();
   const deferredSearch = useDeferredValue(search);
 
@@ -91,6 +102,55 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
     });
   };
 
+  const getProductFieldDraft = (tiktokSkuId: string) => {
+    const row = data.tiktokRows.find((item) => item.tiktok.skuId === tiktokSkuId);
+    return productFieldDrafts[tiktokSkuId] ?? row?.mapping?.product_sync_fields ?? [];
+  };
+
+  const toggleProductField = (tiktokSkuId: string, field: ProductSyncField) => {
+    setProductFieldDrafts((current) => {
+      const currentFields = getProductFieldDraft(tiktokSkuId);
+      const nextFields = currentFields.includes(field)
+        ? currentFields.filter((item) => item !== field)
+        : [...currentFields, field];
+
+      return {
+        ...current,
+        [tiktokSkuId]: nextFields,
+      };
+    });
+  };
+
+  const syncProduct = (tiktokSkuId: string) => {
+    if (activeFieldPickerSkuId !== tiktokSkuId) {
+      setActiveFieldPickerSkuId(tiktokSkuId);
+      setProductFieldDrafts((current) => ({
+        ...current,
+        [tiktokSkuId]: getProductFieldDraft(tiktokSkuId),
+      }));
+      setNotice("Choose Shopify fields, then click Sync now again.");
+      return;
+    }
+
+    const productSyncFields = getProductFieldDraft(tiktokSkuId);
+
+    startTransition(async () => {
+      try {
+        setNotice("Syncing Shopify product to TikTok...");
+        const payload = await postJson<{ ok: true; data: DashboardData }>("/api/mappings", {
+          action: "sync_product",
+          tiktokSkuId,
+          productSyncFields,
+        });
+        setData(payload.data);
+        setActiveFieldPickerSkuId(null);
+        setNotice("Shopify fields saved and synced to TikTok.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not sync product details.");
+      }
+    });
+  };
+
   const createListings = () => {
     startTransition(async () => {
       try {
@@ -103,6 +163,22 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
         setNotice("TikTok draft attempt finished.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not create TikTok drafts.");
+      }
+    });
+  };
+
+  const connectListing = (listingRequestId: string) => {
+    startTransition(async () => {
+      try {
+        setNotice("Connecting draft to Shopify...");
+        const payload = await postJson<{ ok: true; data: DashboardData }>("/api/listings", {
+          action: "connect",
+          listingRequestId,
+        });
+        setData(payload.data);
+        setNotice("Draft connected to Shopify inventory.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not connect draft.");
       }
     });
   };
@@ -189,6 +265,29 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
                   </p>
                 </div>
                 <div className="catalog-action">
+                  {activeFieldPickerSkuId === row.tiktok.skuId ? (
+                    <div className="field-picker" aria-label="Product fields to sync">
+                      {productFieldOptions.map((option) => (
+                        <label className="field-choice" key={option.field}>
+                          <input
+                            type="checkbox"
+                            checked={getProductFieldDraft(row.tiktok.skuId).includes(option.field)}
+                            disabled={isPending}
+                            onChange={() => toggleProductField(row.tiktok.skuId, option.field)}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={!row.syncEnabled || !row.mapping || isPending}
+                    onClick={() => syncProduct(row.tiktok.skuId)}
+                  >
+                    Sync now
+                  </button>
                   <label className={`sync-toggle ${row.syncEnabled ? "is-on" : ""}`}>
                     <input
                       type="checkbox"
@@ -254,7 +353,19 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
                   ) : null}
                   {request.error ? <p className="error-line">{request.error}</p> : null}
                 </div>
-                <span className="status-pill">{request.status.replace("_", " ")}</span>
+                <div className="queue-actions">
+                  <span className="status-pill">{request.status.replace("_", " ")}</span>
+                  {request.status === "tiktok_draft_created" && request.tiktokProductId ? (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => connectListing(request.id)}
+                    >
+                      Connect Shopify
+                    </button>
+                  ) : null}
+                </div>
               </article>
             ))
           )}

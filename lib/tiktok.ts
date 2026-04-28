@@ -8,6 +8,7 @@ import {
 } from "@/lib/tiktok-auth";
 import type {
   SkuMapping,
+  ProductSyncField,
   ShopifyCatalogItem,
   TikTokInventoryRecord,
   TikTokInventoryUpdateInput,
@@ -427,7 +428,7 @@ export async function getTikTokOrderLines(orderId: string) {
         quantity,
       };
     })
-    .filter((line) => line.skuId.length > 0 && line.quantity > 0);
+    .filter((line) => (line.skuId.length > 0 || line.sellerSku.length > 0) && line.quantity > 0);
 }
 
 function generateTikTokSign(input: {
@@ -477,6 +478,72 @@ export async function updateTikTokInventory(mapping: SkuMapping, stock: number) 
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateTikTokProductFromShopify(
+  mapping: SkuMapping,
+  item: ShopifyCatalogItem,
+  fields: ProductSyncField[],
+) {
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: unknown;
+    request_id?: string;
+  };
+
+  if (fields.length === 0) {
+    throw new Error("Choose at least one product field to sync");
+  }
+
+  const body: Record<string, unknown> = {};
+
+  if (fields.includes("name")) {
+    body.title = normalizeTikTokTitle(item);
+  }
+
+  if (fields.includes("description")) {
+    body.description = stripHtml(item.descriptionHtml ?? "") || item.productTitle;
+  }
+
+  if (fields.includes("image") && item.imageUrl) {
+    body.main_images = [{ uri: await uploadTikTokProductImage(item.imageUrl) }];
+  }
+
+  if (fields.includes("price")) {
+    const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
+    body.skus = [
+      {
+        id: mapping.tiktok_sku_id,
+        price: {
+          amount: price,
+          currency: "USD",
+        },
+      },
+    ];
+  }
+  const path = `/product/${config.tiktokUpdateProductVersion}/products/${mapping.tiktok_product_id}/partial_edit`;
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "POST",
+    query: {
+      category_version: config.tiktokCategoryVersion,
+    },
+    body,
+    version: config.tiktokUpdateProductVersion,
+    accessToken: await getTikTokAccessToken(),
+  });
+
+  const response = await tiktokFetchAbsolute<Response>(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (response.code !== undefined && response.code !== 0) {
+    throw new Error(`TikTok product update failed: ${JSON.stringify(response)}`);
+  }
+
+  return response;
 }
 
 function stripHtml(value: string) {

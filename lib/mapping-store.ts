@@ -1,6 +1,11 @@
 import { config } from "@/lib/config";
 import { readJsonFile, writeJsonFile } from "@/lib/file-store";
-import type { ShopifyCatalogItem, SkuMapping, TikTokInventoryRecord } from "@/lib/types";
+import type {
+  ProductSyncField,
+  ShopifyCatalogItem,
+  SkuMapping,
+  TikTokInventoryRecord,
+} from "@/lib/types";
 
 const FILE_NAME = "sku-mapping.json";
 
@@ -45,6 +50,7 @@ export async function upsertSkuMapping(
   const mappings = await loadMappings();
   const nextMapping: SkuMapping = {
     internal_sku: tiktokItem.sellerSku || shopifyItem.sku,
+    shopify_product_id: shopifyItem.productId,
     shopify_inventory_item_id: shopifyItem.inventoryItemId,
     shopify_variant_id: shopifyItem.variantId,
     tiktok_product_id: tiktokItem.productId,
@@ -67,6 +73,7 @@ export async function upsertSkuMapping(
       ...mappings[index],
       ...nextMapping,
       buffer_quantity: mappings[index].buffer_quantity ?? config.defaultBufferQuantity,
+      product_sync_fields: mappings[index].product_sync_fields ?? nextMapping.product_sync_fields,
     };
   } else {
     mappings.push(nextMapping);
@@ -76,11 +83,47 @@ export async function upsertSkuMapping(
   return nextMapping;
 }
 
+export async function upsertDraftListingMapping(params: {
+  tiktokProductId: string;
+  shopifyItem: ShopifyCatalogItem;
+  tiktokSkuId: string;
+  tiktokSellerSku: string;
+  syncEnabled: boolean;
+}) {
+  const skuRecord: TikTokInventoryRecord = {
+    productId: params.tiktokProductId,
+    skuId: params.tiktokSkuId,
+    sellerSku: params.tiktokSellerSku,
+    availableQuantity: params.shopifyItem.inventoryQuantity,
+    productName: params.shopifyItem.productTitle,
+    imageUrl: params.shopifyItem.imageUrl,
+  };
+
+  return upsertSkuMapping(skuRecord, params.shopifyItem, params.syncEnabled);
+}
+
 export async function setMappingSyncEnabled(tiktokSkuId: string, syncEnabled: boolean) {
   const mappings = await loadMappings();
   const nextMappings = mappings.map((mapping) =>
     mapping.tiktok_sku_id === tiktokSkuId
       ? { ...mapping, sync_enabled: syncEnabled }
+      : mapping,
+  );
+
+  await saveSkuMappings(nextMappings);
+}
+
+export async function setMappingProductSyncFields(
+  tiktokSkuId: string,
+  productSyncFields: ProductSyncField[],
+) {
+  const mappings = await loadMappings();
+  const nextMappings = mappings.map((mapping) =>
+    mapping.tiktok_sku_id === tiktokSkuId
+      ? {
+          ...mapping,
+          product_sync_fields: productSyncFields,
+        }
       : mapping,
   );
 

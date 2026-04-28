@@ -1,11 +1,15 @@
+export type ProductSyncField = "name" | "price" | "description" | "image";
+
 export type SkuMapping = {
   internal_sku: string;
+  shopify_product_id?: string;
   shopify_inventory_item_id: string;
   shopify_variant_id: string;
   tiktok_product_id: string;
   tiktok_sku_id: string;
   buffer_quantity: number;
   sync_enabled?: boolean;
+  product_sync_fields?: ProductSyncField[];
   tiktok_seller_sku?: string;
   shopify_product_title?: string;
   shopify_variant_title?: string;
@@ -72,7 +76,13 @@ export type ListingRequest = {
   shopifyProductId: string;
   sku: string;
   title: string;
-  status: "draft" | "queued" | "needs_details" | "tiktok_draft_created" | "failed";
+  status:
+    | "draft"
+    | "queued"
+    | "needs_details"
+    | "tiktok_draft_created"
+    | "connected"
+    | "failed";
   createdAt: string;
   tiktokProductId?: string;
   error?: string;
