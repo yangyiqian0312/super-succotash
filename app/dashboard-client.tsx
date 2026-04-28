@@ -15,7 +15,11 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 
-  const payload = (await response.json()) as T & { error?: string };
+  const text = await response.text();
+  const payload = text
+    ? (JSON.parse(text) as T & { error?: string })
+    : ({ error: `Empty response from ${url}` } as T & { error?: string });
+
   if (!response.ok) {
     throw new Error(payload.error ?? "Request failed");
   }
