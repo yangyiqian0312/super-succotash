@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir =
+  process.env.FILE_STORE_DIR ??
+  (process.env.VERCEL ? path.join("/tmp", "super-succotash-data") : path.join(process.cwd(), "data"));
 
 export async function ensureDataDir() {
   await fs.mkdir(dataDir, { recursive: true });
