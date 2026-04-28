@@ -590,6 +590,8 @@ async function uploadTikTokProductImage(imageUrl: string) {
     body,
     version: "202309",
     accessToken: await getTikTokAccessToken(),
+    includeShopCipher: false,
+    includeShopId: false,
   });
 
   const response = await tiktokFetchAbsolute<Response>(url, {
