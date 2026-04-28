@@ -555,11 +555,66 @@ async function getDefaultTikTokWarehouseId() {
   return warehouseIdCache;
 }
 
+async function uploadTikTokProductImage(imageUrl: string) {
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: {
+      uri?: string;
+      url?: string;
+      image?: {
+        uri?: string;
+        url?: string;
+      };
+    };
+    request_id?: string;
+  };
+
+  const imageResponse = await fetch(imageUrl, {
+    cache: "no-store",
+  });
+
+  if (!imageResponse.ok) {
+    throw new Error(`Shopify image download failed ${imageResponse.status}: ${imageUrl}`);
+  }
+
+  const bytes = Buffer.from(await imageResponse.arrayBuffer());
+  const body = {
+    data: bytes.toString("base64"),
+    use_case: "MAIN_IMAGE",
+  };
+  const path = "/product/202309/images/upload";
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "POST",
+    body,
+    version: "202309",
+    accessToken: await getTikTokAccessToken(),
+  });
+
+  const response = await tiktokFetchAbsolute<Response>(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (response.code !== undefined && response.code !== 0) {
+    throw new Error(`TikTok image upload failed: ${JSON.stringify(response)}`);
+  }
+
+  const uri = response.data?.uri ?? response.data?.image?.uri;
+  if (!uri) {
+    throw new Error(`TikTok image upload missing uri: ${JSON.stringify(response)}`);
+  }
+
+  return uri;
+}
+
 async function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
   const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
   const description = stripHtml(item.descriptionHtml ?? "") || item.productTitle;
   const warehouseId = await getDefaultTikTokWarehouseId();
   const quantity = getTikTokDraftQuantity(item);
+  const imageUri = item.imageUrl ? await uploadTikTokProductImage(item.imageUrl) : "";
 
   return {
     save_mode: "AS_DRAFT",
@@ -567,7 +622,7 @@ async function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
     description,
     category_id: config.tiktokDefaultCategoryId,
     category_version: config.tiktokCategoryVersion,
-    main_images: item.imageUrl ? [{ uri: item.imageUrl }] : undefined,
+    main_images: imageUri ? [{ uri: imageUri }] : undefined,
     package_weight: {
       value: config.tiktokDefaultPackageWeightLb,
       unit: "POUND",
