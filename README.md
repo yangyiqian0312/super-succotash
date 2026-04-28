@@ -23,11 +23,11 @@ Minimal Next.js API project for keeping TikTok Shop inventory aligned to Shopify
 - `updateTikTokInventory(mapping, stock)`
   Calls TikTok `POST /product/202309/inventory/update`.
 - `data/sku-mapping.json`
-  File-based MVP mapping store.
+  Local fallback mapping store when `DATABASE_URL` is not configured.
 - `data/listing-requests.json`
-  File-based queue for Shopify products that should be prepared as new TikTok listings.
+  Local fallback queue when `DATABASE_URL` is not configured.
 - `db/schema.sql`
-  SQL table definition for moving this MVP into a real database later.
+  SQL table definition for the Neon/Postgres production store.
 
 ## Sync rule
 
@@ -63,6 +63,9 @@ Copy `.env.example` into `.env.local` and fill in:
 - `SHOPIFY_LOCATION_ID`
 - `SHOPIFY_WEBHOOK_SECRET` if you want webhook signature verification
 - `DEFAULT_BUFFER_QUANTITY`
+- `DATABASE_URL`
+
+On Vercel, connect a Neon Postgres database and expose its `DATABASE_URL` to the project. The app automatically creates the required tables on first use.
 
 ## Start
 

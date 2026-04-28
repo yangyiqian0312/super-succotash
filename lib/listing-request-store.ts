@@ -1,10 +1,86 @@
+import { hasDatabase, sql } from "@/lib/db";
 import { readJsonFile, writeJsonFile } from "@/lib/file-store";
 import type { ListingRequest, ShopifyCatalogItem } from "@/lib/types";
 
 const FILE_NAME = "listing-requests.json";
 
+type ListingRequestRow = {
+  id: string;
+  shopify_variant_id: string;
+  shopify_product_id: string;
+  sku: string;
+  title: string;
+  status: ListingRequest["status"];
+  created_at: string;
+  tiktok_product_id: string | null;
+  error: string | null;
+};
+
+function rowToListingRequest(row: ListingRequestRow): ListingRequest {
+  return {
+    id: row.id,
+    shopifyVariantId: row.shopify_variant_id,
+    shopifyProductId: row.shopify_product_id,
+    sku: row.sku,
+    title: row.title,
+    status: row.status,
+    createdAt: row.created_at,
+    tiktokProductId: row.tiktok_product_id ?? undefined,
+    error: row.error ?? undefined,
+  };
+}
+
 async function loadRequests() {
+  if (hasDatabase) {
+    const rows = await sql<ListingRequestRow>`
+      SELECT * FROM listing_requests ORDER BY created_at DESC
+    `;
+    return rows.map(rowToListingRequest);
+  }
+
   return readJsonFile<ListingRequest[]>(FILE_NAME, []);
+}
+
+async function saveListingRequest(request: ListingRequest) {
+  if (!hasDatabase) {
+    return;
+  }
+
+  await sql`
+    INSERT INTO listing_requests (
+      id,
+      shopify_variant_id,
+      shopify_product_id,
+      sku,
+      title,
+      status,
+      created_at,
+      tiktok_product_id,
+      error,
+      updated_at
+    )
+    VALUES (
+      ${request.id},
+      ${request.shopifyVariantId},
+      ${request.shopifyProductId},
+      ${request.sku},
+      ${request.title},
+      ${request.status},
+      ${request.createdAt},
+      ${request.tiktokProductId ?? null},
+      ${request.error ?? null},
+      NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      shopify_variant_id = EXCLUDED.shopify_variant_id,
+      shopify_product_id = EXCLUDED.shopify_product_id,
+      sku = EXCLUDED.sku,
+      title = EXCLUDED.title,
+      status = EXCLUDED.status,
+      tiktok_product_id = EXCLUDED.tiktok_product_id,
+      error = EXCLUDED.error,
+      updated_at = NOW()
+  `;
 }
 
 export async function listListingRequests() {
@@ -38,7 +114,14 @@ export async function createListingRequests(items: ShopifyCatalogItem[]) {
     });
   }
 
-  await writeJsonFile(FILE_NAME, next);
+  if (hasDatabase) {
+    for (const request of next.slice(current.length)) {
+      await saveListingRequest(request);
+    }
+  } else {
+    await writeJsonFile(FILE_NAME, next);
+  }
+
   return next;
 }
 
@@ -75,7 +158,12 @@ export async function createOrUpdateListingRequest(params: {
     next.push(request);
   }
 
-  await writeJsonFile(FILE_NAME, next);
+  if (hasDatabase) {
+    await saveListingRequest(request);
+  } else {
+    await writeJsonFile(FILE_NAME, next);
+  }
+
   return next;
 }
 
@@ -100,6 +188,11 @@ export async function updateListingRequestStatus(params: {
     error: params.error,
   };
 
-  await writeJsonFile(FILE_NAME, next);
+  if (hasDatabase) {
+    await saveListingRequest(next[index]);
+  } else {
+    await writeJsonFile(FILE_NAME, next);
+  }
+
   return next[index];
 }

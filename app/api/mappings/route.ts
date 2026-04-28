@@ -5,6 +5,9 @@ import {
   setMappingProductSyncFields,
   setMappingSyncEnabled,
   upsertSkuMapping,
+  mappingMatchesTikTokItem,
+  listSkuMappings,
+  mappingMatchesShopifyItem,
 } from "@/lib/mapping-store";
 import { listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
@@ -50,15 +53,27 @@ export async function POST(request: Request) {
       listShopifyCatalog(),
     ]);
 
-    const tiktokItem = tiktokItems.find((item) => item.skuId === body.tiktokSkuId);
+    const existingMappings = await listSkuMappings();
+    const existingMapping = existingMappings.find(
+      (mapping) => mapping.tiktok_sku_id === body.tiktokSkuId,
+    );
+    const tiktokItem =
+      tiktokItems.find((item) => item.skuId === body.tiktokSkuId) ??
+      (existingMapping
+        ? tiktokItems.find((item) => mappingMatchesTikTokItem(existingMapping, item))
+        : null);
     if (!tiktokItem) {
       return NextResponse.json({ error: "TikTok SKU not found" }, { status: 404 });
     }
 
     const shopifyItem =
+      (existingMapping
+        ? shopifyItems.find((item) => mappingMatchesShopifyItem(existingMapping, item))
+        : null) ??
       shopifyItems.find(
         (item) => item.sku.trim().toLowerCase() === tiktokItem.sellerSku.trim().toLowerCase(),
-      ) ?? null;
+      ) ??
+      null;
 
     if (body.syncEnabled && !shopifyItem) {
       return NextResponse.json(

@@ -1,6 +1,10 @@
 import { listListingRequests } from "@/lib/listing-request-store";
 import { logger } from "@/lib/logger";
-import { listSkuMappings } from "@/lib/mapping-store";
+import {
+  listSkuMappings,
+  mappingMatchesShopifyItem,
+  mappingMatchesTikTokItem,
+} from "@/lib/mapping-store";
 import { getShopifyConnectionStatus, listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
 import type { DashboardData, ListingRequest, ShopifyCatalogItem, SkuMapping, TikTokInventoryRecord } from "@/lib/types";
@@ -27,7 +31,6 @@ export async function getDashboardData(): Promise<DashboardData> {
     getShopifyConnectionStatus(),
   ]);
 
-  const mappingByTikTokSku = new Map(mappings.map((mapping) => [mapping.tiktok_sku_id, mapping]));
   const shopifyBySku = new Map(
     shopifyItems
       .filter((item) => item.sku.trim().length > 0)
@@ -35,11 +38,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   );
 
   const tiktokRows = tiktokItems.map((item) => {
-    const mapping = mappingByTikTokSku.get(item.skuId) ?? null;
+    const mapping =
+      mappings.find((candidate) => mappingMatchesTikTokItem(candidate, item)) ?? null;
     const matchedBySku = shopifyBySku.get(item.sellerSku.trim().toLowerCase()) ?? null;
     const shopifyMatch =
       mapping
-        ? shopifyItems.find((shopifyItem) => shopifyItem.variantId === mapping.shopify_variant_id) ?? matchedBySku
+        ? shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ?? matchedBySku
         : matchedBySku;
 
     return {

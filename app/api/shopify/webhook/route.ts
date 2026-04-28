@@ -55,7 +55,10 @@ export async function POST(request: Request) {
   });
 
   try {
-    if (topic === "products/update" || topic === "products/create") {
+    const looksLikeProductWebhook =
+      Boolean(payload.id) && Array.isArray(payload.variants) && payload.variants.length > 0;
+
+    if (topic === "products/update" || topic === "products/create" || looksLikeProductWebhook) {
       const shopifyItems = await listShopifyCatalog();
       const result = await syncShopifyProductUpdateToTikTok({
         shopifyProductId: payload.id,
