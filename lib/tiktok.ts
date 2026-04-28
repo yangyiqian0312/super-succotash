@@ -566,6 +566,7 @@ async function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
     title: normalizeTikTokTitle(item),
     description,
     category_id: config.tiktokDefaultCategoryId,
+    category_version: config.tiktokCategoryVersion,
     main_images: item.imageUrl ? [{ uri: item.imageUrl }] : undefined,
     package_weight: {
       value: config.tiktokDefaultPackageWeightLb,
@@ -633,6 +634,9 @@ export async function createTikTokDraftListing(item: ShopifyCatalogItem) {
   const url = buildTikTokSignedUrl({
     path,
     method: "POST",
+    query: {
+      category_version: config.tiktokCategoryVersion,
+    },
     body,
     version: config.tiktokCreateProductVersion,
     accessToken: await getTikTokAccessToken(),
@@ -677,30 +681,52 @@ export async function searchTikTokCategories(keyword: string) {
     } | Category[];
   };
 
-  const path = "/product/202309/categories";
-  const url = buildTikTokSignedUrl({
-    path,
-    method: "GET",
-    query: {
-      keyword,
-    },
-    version: "202309",
-    accessToken: await getTikTokAccessToken(),
-  });
+  const attempts = [
+    { path: "/product/202312/categories", version: "202312", includeShopCipher: true },
+    { path: "/product/202312/global_categories", version: "202312", includeShopCipher: false },
+    { path: "/product/202309/categories", version: "202309", includeShopCipher: true },
+    { path: "/product/202309/global_categories", version: "202309", includeShopCipher: false },
+  ];
+  const errors: string[] = [];
 
-  const response = await tiktokFetchAbsolute<Response>(url, {
-    method: "GET",
-  });
+  for (const attempt of attempts) {
+    const url = buildTikTokSignedUrl({
+      path: attempt.path,
+      method: "GET",
+      query: {
+        keyword,
+        category_version: config.tiktokCategoryVersion,
+      },
+      version: attempt.version,
+      accessToken: await getTikTokAccessToken(),
+      includeShopCipher: attempt.includeShopCipher,
+    });
 
-  if (response.code !== undefined && response.code !== 0) {
-    throw new Error(`TikTok category lookup failed: ${JSON.stringify(response)}`);
+    try {
+      const response = await tiktokFetchAbsolute<Response>(url, {
+        method: "GET",
+      });
+
+      if (response.code !== undefined && response.code !== 0) {
+        errors.push(`${attempt.path}: ${JSON.stringify(response)}`);
+        continue;
+      }
+
+      const categories = Array.isArray(response.data)
+        ? response.data
+        : (response.data?.categories ?? response.data?.category_list ?? []);
+
+      if (categories.length > 0) {
+        return categories;
+      }
+
+      errors.push(`${attempt.path}: no categories returned`);
+    } catch (error) {
+      errors.push(`${attempt.path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  if (Array.isArray(response.data)) {
-    return response.data;
-  }
-
-  return response.data?.categories ?? response.data?.category_list ?? [];
+  throw new Error(`TikTok category lookup failed: ${errors.join(" | ")}`);
 }
 
 const fallbackInventory: TikTokInventoryRecord[] = [
