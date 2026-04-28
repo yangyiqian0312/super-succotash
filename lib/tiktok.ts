@@ -26,6 +26,7 @@ let tokenState: TikTokTokenState = {
 };
 
 let refreshPromise: Promise<string> | null = null;
+let warehouseIdCache: string | null = null;
 
 function isTikTokAuthExpired(status: number, bodyText: string) {
   return (
@@ -498,17 +499,67 @@ function getTikTokDraftQuantity(item: ShopifyCatalogItem) {
   return Math.max(0, item.inventoryQuantity - config.defaultBufferQuantity);
 }
 
-function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
+async function getDefaultTikTokWarehouseId() {
+  if (config.tiktokDefaultWarehouseId) {
+    return config.tiktokDefaultWarehouseId;
+  }
+
+  if (warehouseIdCache) {
+    return warehouseIdCache;
+  }
+
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: {
+      warehouses?: Array<{
+        id?: string | number;
+        warehouse_id?: string | number;
+        name?: string;
+      }>;
+      warehouse_list?: Array<{
+        id?: string | number;
+        warehouse_id?: string | number;
+        name?: string;
+      }>;
+    };
+  };
+
+  const path = "/logistics/202309/warehouses";
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "GET",
+    version: "202309",
+    accessToken: await getTikTokAccessToken(),
+  });
+
+  const response = await tiktokFetchAbsolute<Response>(url, {
+    method: "GET",
+  });
+
+  if (response.code !== undefined && response.code !== 0) {
+    throw new Error(`TikTok warehouse lookup failed: ${JSON.stringify(response)}`);
+  }
+
+  const warehouses = response.data?.warehouses ?? response.data?.warehouse_list ?? [];
+  const warehouse = warehouses[0];
+  const warehouseId = warehouse?.id ?? warehouse?.warehouse_id;
+
+  if (!warehouseId) {
+    throw new Error(
+      "TikTok warehouse lookup returned no warehouses. Set TIKTOK_DEFAULT_WAREHOUSE_ID in Vercel.",
+    );
+  }
+
+  warehouseIdCache = String(warehouseId);
+  return warehouseIdCache;
+}
+
+async function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
   const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
   const description = stripHtml(item.descriptionHtml ?? "") || item.productTitle;
-  const inventory = config.tiktokDefaultWarehouseId
-    ? [
-        {
-          warehouse_id: config.tiktokDefaultWarehouseId,
-          quantity: getTikTokDraftQuantity(item),
-        },
-      ]
-    : undefined;
+  const warehouseId = await getDefaultTikTokWarehouseId();
+  const quantity = getTikTokDraftQuantity(item);
 
   return {
     save_mode: "AS_DRAFT",
@@ -533,7 +584,18 @@ function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
           amount: price,
           currency: "USD",
         },
-        inventory,
+        inventory: [
+          {
+            warehouse_id: warehouseId,
+            quantity,
+          },
+        ],
+        stock_infos: [
+          {
+            warehouse_id: warehouseId,
+            available_stock: quantity,
+          },
+        ],
         sales_attributes: [
           {
             name: "style",
@@ -566,7 +628,7 @@ export async function createTikTokDraftListing(item: ShopifyCatalogItem) {
     throw new Error("Missing TIKTOK_DEFAULT_CATEGORY_ID");
   }
 
-  const body = buildTikTokDraftProductBody(item);
+  const body = await buildTikTokDraftProductBody(item);
   const path = "/product/202309/products";
   const url = buildTikTokSignedUrl({
     path,
