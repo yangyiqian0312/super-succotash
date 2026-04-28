@@ -512,9 +512,15 @@ export async function updateTikTokProductFromShopify(
 
   if (fields.includes("price")) {
     const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
+    const detailSku = await getTikTokProductSkuDetail(
+      mapping.tiktok_product_id,
+      mapping.tiktok_sku_id,
+    );
     body.skus = [
       {
         id: mapping.tiktok_sku_id,
+        seller_sku: detailSku?.seller_sku ?? mapping.tiktok_seller_sku ?? mapping.internal_sku,
+        sales_attributes: detailSku?.sales_attributes,
         price: {
           amount: price,
           currency: "USD",
@@ -544,6 +550,50 @@ export async function updateTikTokProductFromShopify(
   }
 
   return response;
+}
+
+type TikTokProductSkuDetail = {
+  id?: string | number;
+  seller_sku?: string;
+  sales_attributes?: Array<Record<string, unknown>>;
+};
+
+async function getTikTokProductSkuDetail(productId: string, skuId: string) {
+  type TikTokProductDetailResponse = {
+    data?: {
+      skus?: TikTokProductSkuDetail[];
+      product?: {
+        skus?: TikTokProductSkuDetail[];
+      };
+    };
+  };
+
+  const accessToken = await getTikTokAccessToken();
+  const body = {};
+  const path = `/product/202309/products/${productId}`;
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "GET",
+    body,
+    version: "202309",
+    accessToken,
+  });
+
+  const response = await tiktokFetchAbsolute<TikTokProductDetailResponse>(url, {
+    method: "GET",
+  });
+  const skus = response.data?.skus ?? response.data?.product?.skus ?? [];
+  const sku = skus.find((item) => String(item.id ?? "") === skuId) ?? skus[0] ?? null;
+
+  if (!sku?.sales_attributes || sku.sales_attributes.length === 0) {
+    logger.warn("tiktok.product.detail.missing_sales_attributes", {
+      productId,
+      skuId,
+      skuCount: skus.length,
+    });
+  }
+
+  return sku;
 }
 
 function stripHtml(value: string) {
