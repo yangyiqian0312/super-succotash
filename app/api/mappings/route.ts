@@ -77,7 +77,12 @@ export async function POST(request: Request) {
 
     if (body.syncEnabled && !shopifyItem) {
       return NextResponse.json(
-        { error: "No Shopify SKU match found for this TikTok product" },
+        {
+          error: "No Shopify SKU match found for this TikTok product",
+          tiktokSkuId: tiktokItem.skuId,
+          tiktokSellerSku: tiktokItem.sellerSku,
+          shopifySkuSample: shopifyItems.slice(0, 10).map((item) => item.sku),
+        },
         { status: 400 },
       );
     }

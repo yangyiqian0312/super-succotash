@@ -56,6 +56,23 @@ export async function GET() {
       const rows = await sql<{ now: string }>`SELECT NOW()::TEXT AS now`;
       checks.databaseOk = true;
       checks.databaseNow = rows[0]?.now;
+      checks.recentEvents = await sql<{
+        source: string;
+        topic: string | null;
+        status: string;
+        details: unknown;
+        created_at: string;
+      }>`
+        SELECT
+          source,
+          topic,
+          status,
+          details,
+          created_at::TEXT
+        FROM debug_events
+        ORDER BY created_at DESC
+        LIMIT 10
+      `;
     } catch (error) {
       checks.databaseOk = false;
       checks.databaseError = error instanceof Error ? error.message : String(error);

@@ -172,6 +172,9 @@ export async function syncShopifyProductUpdateToTikTok(input: {
 
     results.push({
       tiktokSkuId: mapping.tiktok_sku_id,
+      tiktokProductId: mapping.tiktok_product_id,
+      shopifyVariantId: mapping.shopify_variant_id,
+      productSyncFields: mapping.product_sync_fields ?? [],
       ...(await syncMappedProductFields(mapping, shopifyItem)),
     });
   }

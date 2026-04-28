@@ -79,7 +79,50 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
+
+    await runSchema`
+      CREATE TABLE IF NOT EXISTS debug_events (
+        id BIGSERIAL PRIMARY KEY,
+        source TEXT NOT NULL,
+        topic TEXT,
+        status TEXT NOT NULL,
+        details JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
   })();
 
   return schemaPromise;
+}
+
+export async function recordDebugEvent(input: {
+  source: string;
+  topic?: string;
+  status: string;
+  details?: Record<string, unknown>;
+}) {
+  if (!sqlClient) {
+    return;
+  }
+
+  await ensureSchema();
+  await sqlClient`
+    INSERT INTO debug_events (source, topic, status, details, created_at)
+    VALUES (
+      ${input.source},
+      ${input.topic ?? null},
+      ${input.status},
+      ${JSON.stringify(input.details ?? {})}::jsonb,
+      NOW()
+    )
+  `;
+
+  await sqlClient`
+    DELETE FROM debug_events
+    WHERE id IN (
+      SELECT id FROM debug_events
+      ORDER BY created_at DESC
+      OFFSET 50
+    )
+  `;
 }

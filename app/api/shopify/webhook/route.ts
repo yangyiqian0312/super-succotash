@@ -5,6 +5,7 @@ import {
   syncShopifyInventoryToTikTok,
   syncShopifyProductUpdateToTikTok,
 } from "@/lib/sync";
+import { recordDebugEvent } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { listShopifyCatalog } from "@/lib/shopify";
 
@@ -36,6 +37,14 @@ export async function POST(request: Request) {
     logger.error("shopify.webhook.invalid_signature", {
       hasHmacHeader: Boolean(hmacHeader),
     });
+    await recordDebugEvent({
+      source: "shopify.webhook",
+      topic,
+      status: "invalid_signature",
+      details: {
+        hasHmacHeader: Boolean(hmacHeader),
+      },
+    });
 
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
   }
@@ -53,6 +62,18 @@ export async function POST(request: Request) {
     topic,
     payload,
   });
+  await recordDebugEvent({
+    source: "shopify.webhook",
+    topic,
+    status: "received",
+    details: {
+      productId: payload.id,
+      inventoryItemId: payload.inventory_item_id,
+      available: payload.available,
+      variantIds: payload.variants?.map((variant) => variant.id).slice(0, 10),
+      variantCount: payload.variants?.length ?? 0,
+    },
+  });
 
   try {
     const looksLikeProductWebhook =
@@ -66,6 +87,15 @@ export async function POST(request: Request) {
           ?.map((variant) => variant.id)
           .filter((id): id is string | number => id !== undefined),
         shopifyItems,
+      });
+      await recordDebugEvent({
+        source: "shopify.webhook",
+        topic,
+        status: "product_sync_result",
+        details: {
+          productId: payload.id,
+          result,
+        },
       });
 
       return NextResponse.json({ ok: true, result });
@@ -82,13 +112,33 @@ export async function POST(request: Request) {
       shopifyInventoryItemId: String(payload.inventory_item_id),
       available: payload.available,
     });
+    await recordDebugEvent({
+      source: "shopify.webhook",
+      topic,
+      status: "inventory_sync_result",
+      details: {
+        inventoryItemId: payload.inventory_item_id,
+        result,
+      },
+    });
 
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error("shopify.webhook.failed", {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       topic,
       inventoryItemId: payload.inventory_item_id,
+    });
+    await recordDebugEvent({
+      source: "shopify.webhook",
+      topic,
+      status: "failed",
+      details: {
+        error: message,
+        productId: payload.id,
+        inventoryItemId: payload.inventory_item_id,
+      },
     });
 
     return NextResponse.json(

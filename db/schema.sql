@@ -37,3 +37,12 @@ CREATE TABLE IF NOT EXISTS processed_webhooks (
   key TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS debug_events (
+  id BIGSERIAL PRIMARY KEY,
+  source TEXT NOT NULL,
+  topic TEXT,
+  status TEXT NOT NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
