@@ -629,12 +629,12 @@ export async function createTikTokDraftListing(item: ShopifyCatalogItem) {
   }
 
   const body = await buildTikTokDraftProductBody(item);
-  const path = "/product/202309/products";
+  const path = config.tiktokCreateProductPath;
   const url = buildTikTokSignedUrl({
     path,
     method: "POST",
     body,
-    version: "202309",
+    version: config.tiktokCreateProductVersion,
     accessToken: await getTikTokAccessToken(),
   });
 

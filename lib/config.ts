@@ -17,6 +17,9 @@ export const config = {
   tiktokApiVersion: process.env.TIKTOK_API_VERSION ?? "202502",
   tiktokSearchProductsPath:
     process.env.TIKTOK_SEARCH_PRODUCTS_PATH ?? "/product/202502/products/search",
+  tiktokCreateProductPath:
+    process.env.TIKTOK_CREATE_PRODUCT_PATH ?? "/product/202502/products",
+  tiktokCreateProductVersion: process.env.TIKTOK_CREATE_PRODUCT_VERSION ?? "202502",
   tiktokDefaultCategoryId: process.env.TIKTOK_DEFAULT_CATEGORY_ID ?? "1386384",
   tiktokDefaultWarehouseId: process.env.TIKTOK_DEFAULT_WAREHOUSE_ID ?? "",
   tiktokDefaultPackageWeightLb: process.env.TIKTOK_DEFAULT_PACKAGE_WEIGHT_LB ?? "0.5",
