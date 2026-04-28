@@ -111,6 +111,7 @@ async function tiktokFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   return withRetry(`tiktok:${path}`, async () => {
     const accessToken = await getTikTokAccessToken();
+    const isFormData = init?.body instanceof FormData;
     logger.info("tiktok.request", {
       url,
       method: init?.method ?? "GET",
@@ -119,7 +120,7 @@ async function tiktokFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {
       ...init,
       headers: {
-        "content-type": "application/json",
+        ...(isFormData ? {} : { "content-type": "application/json" }),
         "x-tts-access-token": accessToken,
         ...(init?.headers ?? {}),
       },
@@ -138,7 +139,7 @@ async function tiktokFetch<T>(path: string, init?: RequestInit): Promise<T> {
       const retryResponse = await fetch(url, {
         ...init,
         headers: {
-          "content-type": "application/json",
+          ...(isFormData ? {} : { "content-type": "application/json" }),
           "x-tts-access-token": refreshedAccessToken,
           ...(init?.headers ?? {}),
         },
@@ -170,6 +171,7 @@ async function tiktokFetch<T>(path: string, init?: RequestInit): Promise<T> {
 async function tiktokFetchAbsolute<T>(url: string, init?: RequestInit): Promise<T> {
   return withRetry(`tiktok:absolute:${url}`, async () => {
     const accessToken = await getTikTokAccessToken();
+    const isFormData = init?.body instanceof FormData;
     logger.info("tiktok.request", {
       url,
       method: init?.method ?? "GET",
@@ -178,7 +180,7 @@ async function tiktokFetchAbsolute<T>(url: string, init?: RequestInit): Promise<
     const response = await fetch(url, {
       ...init,
       headers: {
-        "content-type": "application/json",
+        ...(isFormData ? {} : { "content-type": "application/json" }),
         "x-tts-access-token": accessToken,
         ...(init?.headers ?? {}),
       },
@@ -198,7 +200,7 @@ async function tiktokFetchAbsolute<T>(url: string, init?: RequestInit): Promise<
       const retryResponse = await fetch(refreshedUrl, {
         ...init,
         headers: {
-          "content-type": "application/json",
+          ...(isFormData ? {} : { "content-type": "application/json" }),
           "x-tts-access-token": refreshedAccessToken,
           ...(init?.headers ?? {}),
         },
@@ -579,15 +581,17 @@ async function uploadTikTokProductImage(imageUrl: string) {
   }
 
   const bytes = Buffer.from(await imageResponse.arrayBuffer());
-  const body = {
-    data: bytes.toString("base64"),
-    use_case: "MAIN_IMAGE",
-  };
+  const contentType = imageResponse.headers.get("content-type") || "image/png";
+  const extension = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "png";
+  const file = new File([bytes], `shopify-product.${extension}`, { type: contentType });
+  const body = new FormData();
+  body.set("data", file);
+  body.set("use_case", "MAIN_IMAGE");
   const path = "/product/202309/images/upload";
   const url = buildTikTokSignedUrl({
     path,
     method: "POST",
-    body,
+    body: {},
     version: "202309",
     accessToken: await getTikTokAccessToken(),
     includeShopCipher: false,
@@ -596,7 +600,8 @@ async function uploadTikTokProductImage(imageUrl: string) {
 
   const response = await tiktokFetchAbsolute<Response>(url, {
     method: "POST",
-    body: JSON.stringify(body),
+    body,
+    headers: {},
   });
 
   if (response.code !== undefined && response.code !== 0) {
