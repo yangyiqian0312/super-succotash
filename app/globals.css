@@ -227,6 +227,16 @@ input {
   line-height: 1.55;
 }
 
+.error-line {
+  max-width: 92ch;
+  margin: 8px 0 0;
+  color: #9f2d17;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .sync-toggle {
   display: inline-flex;
   align-items: center;

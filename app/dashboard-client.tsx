@@ -90,15 +90,15 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
   const createListings = () => {
     startTransition(async () => {
       try {
-        setNotice("Creating listing requests...");
+        setNotice("Creating TikTok draft listings...");
         const payload = await postJson<{ ok: true; data: DashboardData }>("/api/listings", {
           shopifyVariantIds: selectedShopifyIds,
         });
         setData(payload.data);
         setSelectedShopifyIds([]);
-        setNotice("Listing requests created.");
+        setNotice("TikTok draft attempt finished.");
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Could not create listing requests.");
+        setNotice(error instanceof Error ? error.message : "Could not create TikTok drafts.");
       }
     });
   };
@@ -211,7 +211,7 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
               disabled={selectedShopifyIds.length === 0 || isPending}
               onClick={createListings}
             >
-              Create listing request
+              Create TikTok draft
             </button>
           </div>
 
@@ -245,6 +245,10 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
                 <div>
                   <h3>{request.title}</h3>
                   <p className="sku-line">SKU: {request.sku}</p>
+                  {request.tiktokProductId ? (
+                    <p className="match-line">TikTok product ID: {request.tiktokProductId}</p>
+                  ) : null}
+                  {request.error ? <p className="error-line">{request.error}</p> : null}
                 </div>
                 <span className="status-pill">{request.status.replace("_", " ")}</span>
               </article>

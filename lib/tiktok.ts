@@ -8,6 +8,7 @@ import {
 } from "@/lib/tiktok-auth";
 import type {
   SkuMapping,
+  ShopifyCatalogItem,
   TikTokInventoryRecord,
   TikTokInventoryUpdateInput,
   TikTokWebhookPayload,
@@ -473,6 +474,125 @@ export async function updateTikTokInventory(mapping: SkuMapping, stock: number) 
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+function stripHtml(value: string) {
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeTikTokTitle(item: ShopifyCatalogItem) {
+  const title = item.productTitle.trim();
+  return title.toLowerCase().includes("sealed") ? title : `[SEALED] ${title}`;
+}
+
+function getTikTokDraftQuantity(item: ShopifyCatalogItem) {
+  return Math.max(0, item.inventoryQuantity - config.defaultBufferQuantity);
+}
+
+function buildTikTokDraftProductBody(item: ShopifyCatalogItem) {
+  const price = item.price && Number.isFinite(Number(item.price)) ? item.price : "1.00";
+  const description = stripHtml(item.descriptionHtml ?? "") || item.productTitle;
+  const inventory = config.tiktokDefaultWarehouseId
+    ? [
+        {
+          warehouse_id: config.tiktokDefaultWarehouseId,
+          quantity: getTikTokDraftQuantity(item),
+        },
+      ]
+    : undefined;
+
+  return {
+    save_mode: "AS_DRAFT",
+    title: normalizeTikTokTitle(item),
+    description,
+    category_id: config.tiktokDefaultCategoryId,
+    main_images: item.imageUrl ? [{ uri: item.imageUrl }] : undefined,
+    package_weight: {
+      value: config.tiktokDefaultPackageWeightLb,
+      unit: "POUND",
+    },
+    package_dimensions: {
+      length: config.tiktokDefaultPackageLengthIn,
+      width: config.tiktokDefaultPackageWidthIn,
+      height: config.tiktokDefaultPackageHeightIn,
+      unit: "INCH",
+    },
+    skus: [
+      {
+        seller_sku: item.sku || item.variantId,
+        price: {
+          amount: price,
+          currency: "USD",
+        },
+        inventory,
+        sales_attributes: [
+          {
+            name: "style",
+            value_name: item.variantTitle || "Default",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export async function createTikTokDraftListing(item: ShopifyCatalogItem) {
+  type Response = {
+    code?: number;
+    message?: string;
+    data?: {
+      product_id?: string | number;
+      product?: {
+        id?: string | number;
+      };
+    };
+    request_id?: string;
+  };
+
+  if (!config.tiktokShopCipher) {
+    throw new Error("Missing TIKTOK_SHOP_CIPHER");
+  }
+
+  if (!config.tiktokDefaultCategoryId) {
+    throw new Error("Missing TIKTOK_DEFAULT_CATEGORY_ID");
+  }
+
+  const body = buildTikTokDraftProductBody(item);
+  const path = "/product/202309/products";
+  const url = buildTikTokSignedUrl({
+    path,
+    method: "POST",
+    body,
+    version: "202309",
+    accessToken: await getTikTokAccessToken(),
+  });
+
+  const response = await tiktokFetchAbsolute<Response>(url, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (response.code !== undefined && response.code !== 0) {
+    throw new Error(`TikTok draft create failed: ${JSON.stringify(response)}`);
+  }
+
+  const productId = response.data?.product_id ?? response.data?.product?.id;
+  if (!productId) {
+    throw new Error(`TikTok draft create missing product_id: ${JSON.stringify(response)}`);
+  }
+
+  return {
+    productId: String(productId),
+  };
 }
 
 const fallbackInventory: TikTokInventoryRecord[] = [

@@ -62,6 +62,8 @@ export type ShopifyCatalogItem = {
   sku: string;
   inventoryQuantity: number;
   imageUrl?: string;
+  descriptionHtml?: string;
+  price?: string;
 };
 
 export type ListingRequest = {
@@ -70,8 +72,10 @@ export type ListingRequest = {
   shopifyProductId: string;
   sku: string;
   title: string;
-  status: "draft" | "queued" | "needs_details";
+  status: "draft" | "queued" | "needs_details" | "tiktok_draft_created" | "failed";
   createdAt: string;
+  tiktokProductId?: string;
+  error?: string;
 };
 
 export type TikTokSyncRow = {

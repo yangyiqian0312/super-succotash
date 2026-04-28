@@ -227,6 +227,8 @@ const fallbackCatalog: ShopifyCatalogItem[] = [
     sku: "DEMO-SKU-001",
     inventoryQuantity: 12,
     imageUrl: "",
+    descriptionHtml: "Soft studio hoodie.",
+    price: "49.00",
   },
   {
     productId: "shopify-prod-2",
@@ -237,6 +239,8 @@ const fallbackCatalog: ShopifyCatalogItem[] = [
     sku: "DEMO-SKU-002",
     inventoryQuantity: 20,
     imageUrl: "",
+    descriptionHtml: "Everyday canvas tote.",
+    price: "19.00",
   },
 ];
 
@@ -255,6 +259,7 @@ export async function listShopifyCatalog(): Promise<ShopifyCatalogItem[]> {
           node?: {
             id?: string;
             title?: string;
+            descriptionHtml?: string | null;
             featuredImage?: { url?: string | null } | null;
             variants?: {
               edges?: Array<{
@@ -262,6 +267,7 @@ export async function listShopifyCatalog(): Promise<ShopifyCatalogItem[]> {
                   id?: string;
                   title?: string;
                   sku?: string | null;
+                  price?: string | null;
                   inventoryQuantity?: number | null;
                   inventoryItem?: {
                     id?: string;
@@ -283,6 +289,7 @@ export async function listShopifyCatalog(): Promise<ShopifyCatalogItem[]> {
           node {
             id
             title
+            descriptionHtml
             featuredImage {
               url
             }
@@ -292,6 +299,7 @@ export async function listShopifyCatalog(): Promise<ShopifyCatalogItem[]> {
                   id
                   title
                   sku
+                  price
                   inventoryQuantity
                   inventoryItem {
                     id
@@ -330,6 +338,8 @@ export async function listShopifyCatalog(): Promise<ShopifyCatalogItem[]> {
         sku: variant.sku ?? "",
         inventoryQuantity: variant.inventoryQuantity ?? 0,
         imageUrl: product.featuredImage?.url ?? "",
+        descriptionHtml: product.descriptionHtml ?? "",
+        price: variant.price ?? "",
       }))
       .filter((item) => item.inventoryItemId.length > 0);
   });

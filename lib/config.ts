@@ -17,6 +17,12 @@ export const config = {
   tiktokApiVersion: process.env.TIKTOK_API_VERSION ?? "202502",
   tiktokSearchProductsPath:
     process.env.TIKTOK_SEARCH_PRODUCTS_PATH ?? "/product/202502/products/search",
+  tiktokDefaultCategoryId: process.env.TIKTOK_DEFAULT_CATEGORY_ID ?? "1386384",
+  tiktokDefaultWarehouseId: process.env.TIKTOK_DEFAULT_WAREHOUSE_ID ?? "",
+  tiktokDefaultPackageWeightLb: process.env.TIKTOK_DEFAULT_PACKAGE_WEIGHT_LB ?? "0.5",
+  tiktokDefaultPackageLengthIn: process.env.TIKTOK_DEFAULT_PACKAGE_LENGTH_IN ?? "5",
+  tiktokDefaultPackageWidthIn: process.env.TIKTOK_DEFAULT_PACKAGE_WIDTH_IN ?? "5",
+  tiktokDefaultPackageHeightIn: process.env.TIKTOK_DEFAULT_PACKAGE_HEIGHT_IN ?? "5",
   shopifyStoreDomain: process.env.SHOPIFY_STORE_DOMAIN ?? "",
   shopifyApiKey: process.env.SHOPIFY_API_KEY ?? "",
   shopifyApiSecret: process.env.SHOPIFY_API_SECRET ?? "",
