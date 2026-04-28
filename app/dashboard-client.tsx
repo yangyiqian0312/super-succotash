@@ -86,25 +86,60 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
     );
   };
 
-  const toggleSync = (tiktokSkuId: string, syncEnabled: boolean) => {
+  const getProductFieldDraft = (tiktokSkuId: string) => {
+    const row = data.tiktokRows.find((item) => item.tiktok.skuId === tiktokSkuId);
+    return productFieldDrafts[tiktokSkuId] ?? row?.mapping?.product_sync_fields ?? [];
+  };
+
+  const openFieldPicker = (tiktokSkuId: string) => {
+    setActiveFieldPickerSkuId(tiktokSkuId);
+    setProductFieldDrafts((current) => ({
+      ...current,
+      [tiktokSkuId]: getProductFieldDraft(tiktokSkuId),
+    }));
+    setNotice("Choose product fields, then save sync.");
+  };
+
+  const saveSyncSettings = (tiktokSkuId: string) => {
+    const productSyncFields = getProductFieldDraft(tiktokSkuId);
+
     startTransition(async () => {
       try {
-        setNotice(syncEnabled ? "Enabling sync..." : "Turning sync off...");
+        setNotice("Saving sync settings...");
         const payload = await postJson<{ ok: true; data: DashboardData }>("/api/mappings", {
           tiktokSkuId,
-          syncEnabled,
+          syncEnabled: true,
+          productSyncFields,
         });
         setData(payload.data);
-        setNotice(syncEnabled ? "Inventory sync enabled." : "Inventory sync turned off.");
+        setActiveFieldPickerSkuId(null);
+        setNotice("Inventory sync enabled. Selected fields will auto-sync from Shopify.");
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Could not update sync setting.");
+        setNotice(error instanceof Error ? error.message : "Could not save sync settings.");
       }
     });
   };
 
-  const getProductFieldDraft = (tiktokSkuId: string) => {
-    const row = data.tiktokRows.find((item) => item.tiktok.skuId === tiktokSkuId);
-    return productFieldDrafts[tiktokSkuId] ?? row?.mapping?.product_sync_fields ?? [];
+  const toggleSync = (tiktokSkuId: string, syncEnabled: boolean) => {
+    if (syncEnabled) {
+      openFieldPicker(tiktokSkuId);
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setNotice("Turning sync off...");
+        const payload = await postJson<{ ok: true; data: DashboardData }>("/api/mappings", {
+          tiktokSkuId,
+          syncEnabled: false,
+        });
+        setData(payload.data);
+        setActiveFieldPickerSkuId(null);
+        setNotice("Inventory sync turned off.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Could not update sync setting.");
+      }
+    });
   };
 
   const toggleProductField = (tiktokSkuId: string, field: ProductSyncField) => {
@@ -118,36 +153,6 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
         ...current,
         [tiktokSkuId]: nextFields,
       };
-    });
-  };
-
-  const syncProduct = (tiktokSkuId: string) => {
-    if (activeFieldPickerSkuId !== tiktokSkuId) {
-      setActiveFieldPickerSkuId(tiktokSkuId);
-      setProductFieldDrafts((current) => ({
-        ...current,
-        [tiktokSkuId]: getProductFieldDraft(tiktokSkuId),
-      }));
-      setNotice("Choose Shopify fields, then click Sync now again.");
-      return;
-    }
-
-    const productSyncFields = getProductFieldDraft(tiktokSkuId);
-
-    startTransition(async () => {
-      try {
-        setNotice("Syncing Shopify product to TikTok...");
-        const payload = await postJson<{ ok: true; data: DashboardData }>("/api/mappings", {
-          action: "sync_product",
-          tiktokSkuId,
-          productSyncFields,
-        });
-        setData(payload.data);
-        setActiveFieldPickerSkuId(null);
-        setNotice("Shopify fields saved and synced to TikTok.");
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Could not sync product details.");
-      }
     });
   };
 
@@ -266,28 +271,30 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
                 </div>
                 <div className="catalog-action">
                   {activeFieldPickerSkuId === row.tiktok.skuId ? (
-                    <div className="field-picker" aria-label="Product fields to sync">
-                      {productFieldOptions.map((option) => (
-                        <label className="field-choice" key={option.field}>
-                          <input
-                            type="checkbox"
-                            checked={getProductFieldDraft(row.tiktok.skuId).includes(option.field)}
-                            disabled={isPending}
-                            onChange={() => toggleProductField(row.tiktok.skuId, option.field)}
-                          />
-                          <span>{option.label}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <>
+                      <div className="field-picker" aria-label="Product fields to sync">
+                        {productFieldOptions.map((option) => (
+                          <label className="field-choice" key={option.field}>
+                            <input
+                              type="checkbox"
+                              checked={getProductFieldDraft(row.tiktok.skuId).includes(option.field)}
+                              disabled={isPending}
+                              onChange={() => toggleProductField(row.tiktok.skuId, option.field)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={getProductFieldDraft(row.tiktok.skuId).length === 0 || isPending}
+                        onClick={() => saveSyncSettings(row.tiktok.skuId)}
+                      >
+                        Save sync
+                      </button>
+                    </>
                   ) : null}
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={!row.syncEnabled || !row.mapping || isPending}
-                    onClick={() => syncProduct(row.tiktok.skuId)}
-                  >
-                    Sync now
-                  </button>
                   <label className={`sync-toggle ${row.syncEnabled ? "is-on" : ""}`}>
                     <input
                       type="checkbox"
