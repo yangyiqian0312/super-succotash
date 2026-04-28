@@ -55,6 +55,7 @@ export type TikTokInventoryRecord = {
   imageUrl?: string;
   productStatus?: string;
   skuStatus?: string;
+  source?: "tiktok" | "mapping";
 };
 
 export type ShopifyCatalogItem = {

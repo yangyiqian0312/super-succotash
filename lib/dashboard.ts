@@ -55,6 +55,37 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   });
 
+  const tiktokRowKeys = new Set(
+    tiktokRows.map((row) => `${row.tiktok.productId}:${row.tiktok.skuId}`),
+  );
+
+  for (const mapping of mappings) {
+    const key = `${mapping.tiktok_product_id}:${mapping.tiktok_sku_id}`;
+    if (tiktokRowKeys.has(key)) {
+      continue;
+    }
+
+    const shopifyMatch =
+      shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ??
+      null;
+
+    tiktokRows.push({
+      tiktok: {
+        productId: mapping.tiktok_product_id,
+        skuId: mapping.tiktok_sku_id,
+        sellerSku: mapping.tiktok_seller_sku ?? mapping.internal_sku,
+        availableQuantity: shopifyMatch?.inventoryQuantity ?? 0,
+        productName: mapping.shopify_product_title ?? mapping.internal_sku,
+        imageUrl: shopifyMatch?.imageUrl,
+        source: "mapping",
+      },
+      shopifyMatch,
+      mapping,
+      syncEnabled: mapping.sync_enabled ?? false,
+      canEnableSync: Boolean(shopifyMatch),
+    });
+  }
+
   const listedShopifyVariantIds = new Set(
     tiktokRows
       .map((row) => row.shopifyMatch?.variantId)
