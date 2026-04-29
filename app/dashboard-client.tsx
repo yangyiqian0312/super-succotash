@@ -109,7 +109,7 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
       ...current,
       [tiktokSkuId]: getPricePercentDraft(tiktokSkuId),
     }));
-    setNotice("Choose product fields, then save sync.");
+    setNotice("Choose product fields, or leave them blank for inventory-only sync.");
   };
 
   const saveSyncSettings = (tiktokSkuId: string) => {
@@ -126,7 +126,11 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
         });
         setData(payload.data);
         setActiveSyncModalSkuId(null);
-        setNotice("Inventory sync enabled. Selected fields will auto-sync from Shopify.");
+        setNotice(
+          productSyncFields.length > 0
+            ? "Inventory sync enabled. Selected fields will auto-sync from Shopify."
+            : "Inventory-only sync enabled.",
+        );
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save sync settings.");
       }
@@ -415,6 +419,7 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
               <strong>{activeSyncRow.tiktok.productName}</strong>
               <span>{activeSyncRow.tiktok.sellerSku}</span>
             </div>
+            <p className="modal-note">Leave all fields unchecked to sync inventory only.</p>
 
             <div className="modal-field-grid">
               {productFieldOptions.map((option) => (
@@ -473,7 +478,7 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
               <button
                 className="primary-button"
                 type="button"
-                disabled={getProductFieldDraft(activeSyncRow.tiktok.skuId).length === 0 || isPending}
+                disabled={isPending}
                 onClick={() => saveSyncSettings(activeSyncRow.tiktok.skuId)}
               >
                 Save sync

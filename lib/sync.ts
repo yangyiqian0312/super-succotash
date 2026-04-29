@@ -94,7 +94,13 @@ export async function syncShopifyProductToTikTok(input: {
   }
 
   const fields = input.fields ?? mapping.product_sync_fields ?? [];
-  const productResponse = await updateTikTokProductFromShopify(mapping, shopifyItem, fields);
+  const productResponse =
+    fields.length > 0
+      ? await updateTikTokProductFromShopify(mapping, shopifyItem, fields)
+      : {
+          skipped: true,
+          reason: "no_product_fields_selected",
+        };
   const inventoryResponse = await syncShopifyInventoryToTikTok({
     shopifyInventoryItemId: shopifyItem.inventoryItemId,
     available: shopifyItem.inventoryQuantity,

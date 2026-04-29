@@ -53,12 +53,6 @@ export async function POST(request: Request) {
     }
 
     const fields = parseProductSyncFields(body.productSyncFields);
-    if (body.syncEnabled && fields.length === 0) {
-      return NextResponse.json(
-        { error: "Choose at least one product field to sync" },
-        { status: 400 },
-      );
-    }
     const priceSyncPercent = parsePriceSyncPercent(body.priceSyncPercent);
 
     const [tiktokItems, shopifyItems] = await Promise.all([
