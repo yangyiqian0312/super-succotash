@@ -38,7 +38,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     safeDashboardValue<ShopifyCatalogItem[]>("shopify.catalog", listShopifyCatalog, []),
     safeDashboardValue<SkuMapping[]>("sku.mappings", listSkuMappings, []),
     safeDashboardValue<ListingRequest[]>("listing.requests", listListingRequests, []),
-    safeDashboardValue<ActivityLogEntry[]>("activity.log", () => listDebugEvents(25), []),
+    safeDashboardValue<ActivityLogEntry[]>("activity.log", () => listDebugEvents(50), []),
     getShopifyConnectionStatus(),
   ]);
 
@@ -102,12 +102,29 @@ export async function getDashboardData(): Promise<DashboardData> {
   const shopifyUnlisted = shopifyItems.filter(
     (item) => !listedShopifyVariantIds.has(item.variantId) && !requestedVariantIds.has(item.variantId),
   );
+  const visibleActivityLog = activityLog.filter((entry) => {
+    if (entry.status === "received") {
+      return false;
+    }
+
+    if (entry.source === "tiktok.webhook") {
+      return ["order_sync_result", "failed", "invalid_signature"].includes(entry.status);
+    }
+
+    if (entry.source === "shopify.webhook") {
+      return ["inventory_sync_result", "product_sync_result", "failed", "invalid_signature"].includes(
+        entry.status,
+      );
+    }
+
+    return false;
+  }).slice(0, 25);
 
   return {
     tiktokRows,
     shopifyUnlisted,
     listingRequests,
-    activityLog,
+    activityLog: visibleActivityLog,
     shopifyConnection: {
       connected: shopifyConnection.connected,
       shopDomain: shopifyConnection.shopDomain,
