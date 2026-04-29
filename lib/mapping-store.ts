@@ -219,7 +219,11 @@ export function findShopifyMatchForTikTokItem(
     );
   });
 
-  return variantMatch ?? null;
+  if (variantMatch) {
+    return variantMatch;
+  }
+
+  return null;
 }
 
 export function mappingMatchesShopifyItem(

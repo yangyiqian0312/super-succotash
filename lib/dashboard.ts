@@ -8,7 +8,14 @@ import {
 } from "@/lib/mapping-store";
 import { getShopifyConnectionStatus, listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
-import type { DashboardData, ListingRequest, ShopifyCatalogItem, SkuMapping, TikTokInventoryRecord } from "@/lib/types";
+import type {
+  DashboardData,
+  ListingRequest,
+  ShopifyCatalogItem,
+  SkuMapping,
+  TikTokInventoryRecord,
+  TikTokSyncRow,
+} from "@/lib/types";
 
 async function safeDashboardValue<T>(label: string, loader: () => Promise<T>, fallback: T) {
   try {
@@ -32,7 +39,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     getShopifyConnectionStatus(),
   ]);
 
-  const tiktokRows = tiktokItems.map((item) => {
+  const tiktokRows: TikTokSyncRow[] = tiktokItems.map((item) => {
     const mapping =
       mappings.find((candidate) => mappingMatchesTikTokItem(candidate, item)) ?? null;
     const matchedBySku = findShopifyMatchForTikTokItem(item, shopifyItems);

@@ -33,6 +33,9 @@ export async function GET() {
       productId: item.productId,
       skuId: item.skuId,
       sellerSku: item.sellerSku,
+      variantTitle: item.variantTitle,
+      salesAttributes: item.salesAttributes,
+      availableQuantity: item.availableQuantity,
       productName: item.productName,
     }));
   } catch (error) {

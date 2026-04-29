@@ -562,7 +562,32 @@ type TikTokProductSkuDetail = {
   sales_attributes?: Array<Record<string, unknown>>;
 };
 
-async function getTikTokProductSkuDetail(productId: string, skuId: string) {
+function extractSalesAttributeValues(attributes: Array<Record<string, unknown>> | undefined) {
+  return (attributes ?? [])
+    .flatMap((attribute) => {
+      const directValue =
+        attribute.value_name ??
+        attribute.attribute_value_name ??
+        attribute.value ??
+        attribute.name ??
+        attribute.attribute_name;
+      const nestedValues = Array.isArray(attribute.values)
+        ? attribute.values.map((value) =>
+            value && typeof value === "object"
+              ? ((value as Record<string, unknown>).name ??
+                  (value as Record<string, unknown>).value_name ??
+                  (value as Record<string, unknown>).attribute_value_name)
+              : value,
+          )
+        : [];
+
+      return [directValue, ...nestedValues];
+    })
+    .map((value) => normalizeText(value, ""))
+    .filter((value) => value.length > 0);
+}
+
+async function getTikTokProductSkuDetails(productId: string) {
   type TikTokProductDetailResponse = {
     data?: {
       skus?: TikTokProductSkuDetail[];
@@ -586,7 +611,12 @@ async function getTikTokProductSkuDetail(productId: string, skuId: string) {
   const response = await tiktokFetchAbsolute<TikTokProductDetailResponse>(url, {
     method: "GET",
   });
-  const skus = response.data?.skus ?? response.data?.product?.skus ?? [];
+
+  return response.data?.skus ?? response.data?.product?.skus ?? [];
+}
+
+async function getTikTokProductSkuDetail(productId: string, skuId: string) {
+  const skus = await getTikTokProductSkuDetails(productId);
   const sku = skus.find((item) => String(item.id ?? "") === skuId) ?? skus[0] ?? null;
 
   if (!sku?.sales_attributes || sku.sales_attributes.length === 0) {
@@ -1081,18 +1111,7 @@ async function fetchTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
           (sum, inventoryRow) => sum + (inventoryRow.quantity ?? 0),
           0,
         );
-        const salesAttributes = (sku.sales_attributes ?? [])
-          .map((attribute) =>
-            normalizeText(
-              attribute.value_name ??
-                attribute.attribute_value_name ??
-                attribute.value ??
-                attribute.name ??
-                attribute.attribute_name,
-              "",
-            ),
-          )
-          .filter((value) => value.length > 0);
+        const salesAttributes = extractSalesAttributeValues(sku.sales_attributes);
 
         rows.push({
           productId,
@@ -1111,6 +1130,41 @@ async function fetchTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
 
     nextPageToken = response.data?.next_page_token ?? "";
   } while (nextPageToken);
+
+  const duplicateSkuProductIds = Array.from(
+    rows.reduce((groups, row) => {
+      const key = `${row.productId}:${row.sellerSku.trim().toLowerCase()}`;
+      const group = groups.get(key) ?? [];
+      group.push(row);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, TikTokInventoryRecord[]>()),
+  )
+    .filter(([, group]) => group.length > 1 && group.some((row) => !row.variantTitle))
+    .map(([, group]) => group[0].productId);
+
+  for (const productId of Array.from(new Set(duplicateSkuProductIds)).slice(0, 24)) {
+    try {
+      const skuDetails = await getTikTokProductSkuDetails(productId);
+      for (const row of rows) {
+        if (row.productId !== productId || row.variantTitle) {
+          continue;
+        }
+
+        const detail = skuDetails.find((sku) => String(sku.id ?? "") === row.skuId);
+        const salesAttributes = extractSalesAttributeValues(detail?.sales_attributes);
+        if (salesAttributes.length > 0) {
+          row.salesAttributes = salesAttributes;
+          row.variantTitle = salesAttributes.join(" / ");
+        }
+      }
+    } catch (error) {
+      logger.warn("tiktok.product.detail.variant_fetch_failed", {
+        productId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   const productIdsNeedingImages = Array.from(uniqueProductIds).filter((productId) => {
     return rows.some((row) => row.productId === productId && !row.imageUrl);
