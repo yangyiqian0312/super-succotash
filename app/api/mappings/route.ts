@@ -11,6 +11,7 @@ import {
   mappingMatchesShopifyItem,
 } from "@/lib/mapping-store";
 import { listShopifyCatalog } from "@/lib/shopify";
+import { syncShopifyProductToTikTok } from "@/lib/sync";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
 import type { ProductSyncField } from "@/lib/types";
 
@@ -104,6 +105,11 @@ export async function POST(request: Request) {
 
     if (body.syncEnabled) {
       await setMappingProductSyncFields(body.tiktokSkuId, fields, priceSyncPercent);
+      await syncShopifyProductToTikTok({
+        tiktokSkuId: body.tiktokSkuId,
+        shopifyItems,
+        fields,
+      });
     }
 
     const data = await getDashboardData();
