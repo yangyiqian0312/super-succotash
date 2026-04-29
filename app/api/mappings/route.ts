@@ -5,6 +5,7 @@ import {
   setMappingProductSyncFields,
   setMappingSyncEnabled,
   upsertSkuMapping,
+  findShopifyMatchForTikTokItem,
   mappingMatchesTikTokItem,
   listSkuMappings,
   mappingMatchesShopifyItem,
@@ -81,10 +82,7 @@ export async function POST(request: Request) {
       (existingMapping
         ? shopifyItems.find((item) => mappingMatchesShopifyItem(existingMapping, item))
         : null) ??
-      shopifyItems.find(
-        (item) => item.sku.trim().toLowerCase() === tiktokItem.sellerSku.trim().toLowerCase(),
-      ) ??
-      null;
+      findShopifyMatchForTikTokItem(tiktokItem, shopifyItems);
 
     if (body.syncEnabled && !shopifyItem) {
       return NextResponse.json(

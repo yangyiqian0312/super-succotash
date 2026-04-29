@@ -176,8 +176,50 @@ export function mappingMatchesTikTokItem(
     (mapping.tiktok_product_id === tiktokItem.productId &&
       Boolean(sellerSku) &&
       (mapping.tiktok_seller_sku?.trim().toLowerCase() === sellerSku ||
-        mapping.internal_sku.trim().toLowerCase() === sellerSku))
+        mapping.internal_sku.trim().toLowerCase() === sellerSku) &&
+      (!tiktokItem.variantTitle ||
+        !mapping.shopify_variant_title ||
+        normalizeMatchText(tiktokItem.variantTitle) ===
+          normalizeMatchText(mapping.shopify_variant_title)))
   );
+}
+
+function normalizeMatchText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\w\s]/g, "");
+}
+
+export function findShopifyMatchForTikTokItem(
+  tiktokItem: TikTokInventoryRecord,
+  shopifyItems: ShopifyCatalogItem[],
+) {
+  const sellerSku = tiktokItem.sellerSku.trim().toLowerCase();
+  const skuMatches = shopifyItems.filter(
+    (item) => item.sku.trim().toLowerCase() === sellerSku,
+  );
+
+  if (skuMatches.length <= 1) {
+    return skuMatches[0] ?? null;
+  }
+
+  const tiktokVariantValues = [
+    tiktokItem.variantTitle,
+    ...(tiktokItem.salesAttributes ?? []),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeMatchText);
+
+  const variantMatch = skuMatches.find((item) => {
+    const shopifyVariant = normalizeMatchText(item.variantTitle);
+    return tiktokVariantValues.some(
+      (value) => value === shopifyVariant || shopifyVariant.includes(value) || value.includes(shopifyVariant),
+    );
+  });
+
+  return variantMatch ?? null;
 }
 
 export function mappingMatchesShopifyItem(

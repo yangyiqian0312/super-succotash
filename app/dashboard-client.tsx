@@ -271,6 +271,9 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
                   <div className="catalog-badge">{row.tiktok.availableQuantity} in TikTok</div>
                   <h3>{row.tiktok.productName}</h3>
                   <p className="sku-line">TikTok SKU: {row.tiktok.sellerSku}</p>
+                  {row.tiktok.variantTitle ? (
+                    <p className="sku-line">TikTok Variant: {row.tiktok.variantTitle}</p>
+                  ) : null}
                   <p className="match-line">
                     {row.shopifyMatch
                       ? `Matched to Shopify: ${row.shopifyMatch.productTitle} / ${row.shopifyMatch.variantTitle}`

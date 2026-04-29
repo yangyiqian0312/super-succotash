@@ -2,6 +2,7 @@ import { listListingRequests } from "@/lib/listing-request-store";
 import { logger } from "@/lib/logger";
 import {
   listSkuMappings,
+  findShopifyMatchForTikTokItem,
   mappingMatchesShopifyItem,
   mappingMatchesTikTokItem,
 } from "@/lib/mapping-store";
@@ -31,16 +32,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     getShopifyConnectionStatus(),
   ]);
 
-  const shopifyBySku = new Map(
-    shopifyItems
-      .filter((item) => item.sku.trim().length > 0)
-      .map((item) => [item.sku.trim().toLowerCase(), item]),
-  );
-
   const tiktokRows = tiktokItems.map((item) => {
     const mapping =
       mappings.find((candidate) => mappingMatchesTikTokItem(candidate, item)) ?? null;
-    const matchedBySku = shopifyBySku.get(item.sellerSku.trim().toLowerCase()) ?? null;
+    const matchedBySku = findShopifyMatchForTikTokItem(item, shopifyItems);
     const shopifyMatch =
       mapping
         ? shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ?? matchedBySku
@@ -76,6 +71,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         sellerSku: mapping.tiktok_seller_sku ?? mapping.internal_sku,
         availableQuantity: shopifyMatch?.inventoryQuantity ?? 0,
         productName: mapping.shopify_product_title ?? mapping.internal_sku,
+        variantTitle: mapping.shopify_variant_title,
         imageUrl: shopifyMatch?.imageUrl,
         source: "mapping",
       },

@@ -982,6 +982,13 @@ type TikTokProductsSearchResponse = {
       skus?: Array<{
         id?: string | number;
         seller_sku?: string;
+        sales_attributes?: Array<{
+          name?: string;
+          value_name?: string;
+          value?: string;
+          attribute_name?: string;
+          attribute_value_name?: string;
+        }>;
         inventory?: Array<{
           quantity?: number;
         }>;
@@ -1074,6 +1081,18 @@ async function fetchTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
           (sum, inventoryRow) => sum + (inventoryRow.quantity ?? 0),
           0,
         );
+        const salesAttributes = (sku.sales_attributes ?? [])
+          .map((attribute) =>
+            normalizeText(
+              attribute.value_name ??
+                attribute.attribute_value_name ??
+                attribute.value ??
+                attribute.name ??
+                attribute.attribute_name,
+              "",
+            ),
+          )
+          .filter((value) => value.length > 0);
 
         rows.push({
           productId,
@@ -1081,6 +1100,8 @@ async function fetchTikTokInventoryCatalog(): Promise<TikTokInventoryRecord[]> {
           sellerSku: sku.seller_sku ?? "",
           availableQuantity: quantity,
           productName,
+          variantTitle: salesAttributes.join(" / "),
+          salesAttributes,
           imageUrl,
           productStatus: product.status,
           skuStatus: sku.status_info?.status,

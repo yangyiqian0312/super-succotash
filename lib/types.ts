@@ -53,6 +53,8 @@ export type TikTokInventoryRecord = {
   sellerSku: string;
   availableQuantity: number;
   productName: string;
+  variantTitle?: string;
+  salesAttributes?: string[];
   imageUrl?: string;
   productStatus?: string;
   skuStatus?: string;
