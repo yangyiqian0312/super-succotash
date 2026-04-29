@@ -118,7 +118,7 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
     startTransition(async () => {
       try {
         setNotice("Saving sync settings...");
-        const payload = await postJson<{ ok: true; data: DashboardData }>("/api/mappings", {
+        const payload = await postJson<{ ok: true; data: DashboardData; warning?: string | null }>("/api/mappings", {
           tiktokSkuId,
           syncEnabled: true,
           productSyncFields,
@@ -126,11 +126,15 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
         });
         setData(payload.data);
         setActiveSyncModalSkuId(null);
-        setNotice(
-          productSyncFields.length > 0
-            ? "Inventory sync enabled. Selected fields will auto-sync from Shopify."
-            : "Inventory-only sync enabled.",
-        );
+        if (payload.warning) {
+          setNotice(`Sync saved. Initial TikTok update failed: ${payload.warning}`);
+        } else {
+          setNotice(
+            productSyncFields.length > 0
+              ? "Inventory sync enabled. Selected fields will auto-sync from Shopify."
+              : "Inventory-only sync enabled.",
+          );
+        }
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Could not save sync settings.");
       }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardData } from "@/lib/dashboard";
+import { recordDebugEvent } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import {
   setMappingProductSyncFields,
@@ -97,17 +98,35 @@ export async function POST(request: Request) {
       await setMappingSyncEnabled(body.tiktokSkuId, body.syncEnabled);
     }
 
+    let syncWarning: string | null = null;
+
     if (body.syncEnabled) {
       await setMappingProductSyncFields(body.tiktokSkuId, fields, priceSyncPercent);
-      await syncShopifyProductToTikTok({
-        tiktokSkuId: body.tiktokSkuId,
-        shopifyItems,
-        fields,
-      });
+      try {
+        await syncShopifyProductToTikTok({
+          tiktokSkuId: body.tiktokSkuId,
+          shopifyItems,
+          fields,
+        });
+      } catch (error) {
+        syncWarning = error instanceof Error ? error.message : String(error);
+        logger.error("mapping.initial_sync.failed", {
+          tiktokSkuId: body.tiktokSkuId,
+          error: syncWarning,
+        });
+        await recordDebugEvent({
+          source: "manual.sync",
+          status: "initial_sync_failed",
+          details: {
+            tiktokSkuId: body.tiktokSkuId,
+            error: syncWarning,
+          },
+        });
+      }
     }
 
     const data = await getDashboardData();
-    return NextResponse.json({ ok: true, data });
+    return NextResponse.json({ ok: true, data, warning: syncWarning });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("mapping.update.failed", { error: message });
