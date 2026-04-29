@@ -51,8 +51,17 @@ export async function getDashboardData(): Promise<DashboardData> {
         ? shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ?? matchedBySku
         : matchedBySku;
 
+    const tiktok =
+      !item.variantTitle && mapping?.shopify_variant_title
+        ? {
+            ...item,
+            variantTitle: mapping.shopify_variant_title,
+            salesAttributes: [mapping.shopify_variant_title],
+          }
+        : item;
+
     return {
-      tiktok: item,
+      tiktok,
       shopifyMatch,
       mapping,
       syncEnabled: mapping?.sync_enabled ?? false,
