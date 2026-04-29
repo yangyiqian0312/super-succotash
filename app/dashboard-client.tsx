@@ -365,6 +365,34 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
         </div>
       </section>
 
+      <section className="panel activity-panel">
+        <div className="panel-header">
+          <div>
+            <p className="panel-kicker">Activity</p>
+            <h2>Sync log</h2>
+          </div>
+        </div>
+
+        <div className="activity-list">
+          {data.activityLog.length === 0 ? (
+            <p className="empty-state">No sync activity yet.</p>
+          ) : (
+            data.activityLog.map((entry, index) => (
+              <article className="activity-item" key={`${entry.createdAt}-${index}`}>
+                <div>
+                  <div className="activity-title">
+                    <span className="status-pill">{entry.status.replaceAll("_", " ")}</span>
+                    <strong>{formatActivityTitle(entry)}</strong>
+                  </div>
+                  <p className="match-line">{formatActivityDetails(entry.details)}</p>
+                </div>
+                <time className="activity-time">{formatActivityTime(entry.createdAt)}</time>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+
       {activeSyncRow ? (
         <div className="modal-backdrop" role="presentation">
           <section className="sync-modal" role="dialog" aria-modal="true" aria-labelledby="sync-modal-title">
@@ -456,6 +484,71 @@ export default function DashboardClient({ initialData, initialNotice }: Props) {
       ) : null}
     </main>
   );
+}
+
+function formatActivityTitle(entry: DashboardData["activityLog"][number]) {
+  if (entry.source === "tiktok.webhook") {
+    return `TikTok order ${readDetailString(entry.details, "orderId") || entry.topic || ""}`;
+  }
+
+  if (entry.source === "shopify.webhook") {
+    return `Shopify ${entry.topic || "webhook"}`;
+  }
+
+  return entry.source;
+}
+
+function formatActivityDetails(details: unknown) {
+  if (!details || typeof details !== "object") {
+    return "";
+  }
+
+  const record = details as Record<string, unknown>;
+  const result = record.result && typeof record.result === "object"
+    ? (record.result as Record<string, unknown>)
+    : null;
+  const lineResults = Array.isArray(result?.lineResults) ? result.lineResults : [];
+
+  if (lineResults.length > 0) {
+    return lineResults
+      .map((line) => {
+        const item = line as Record<string, unknown>;
+        const status = item.skipped ? `Skipped: ${item.reason ?? "unknown"}` : "Adjusted";
+        const sku = item.sellerSku || item.tiktokSkuId || "unknown SKU";
+        const quantity = item.quantity ? `qty ${item.quantity}` : "";
+        const delta = item.availableDelta ? `delta ${item.availableDelta}` : "";
+        return [status, sku, quantity, delta].filter(Boolean).join(" · ");
+      })
+      .join(" | ");
+  }
+
+  const pieces = [
+    readDetailString(details, "orderStatus"),
+    readDetailString(details, "orderId"),
+    readDetailString(details, "error"),
+    result?.appliedCount !== undefined ? `applied ${String(result.appliedCount)}` : "",
+    result?.reason ? `reason ${String(result.reason)}` : "",
+  ];
+
+  return pieces.filter(Boolean).join(" · ");
+}
+
+function readDetailString(details: unknown, key: string) {
+  if (!details || typeof details !== "object") {
+    return "";
+  }
+
+  const value = (details as Record<string, unknown>)[key];
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function formatActivityTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
 }
 
 function ShopifyChoiceCard({

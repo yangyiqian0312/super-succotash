@@ -100,10 +100,19 @@ export type TikTokSyncRow = {
   canEnableSync: boolean;
 };
 
+export type ActivityLogEntry = {
+  source: string;
+  topic: string | null;
+  status: string;
+  details: unknown;
+  createdAt: string;
+};
+
 export type DashboardData = {
   tiktokRows: TikTokSyncRow[];
   shopifyUnlisted: ShopifyCatalogItem[];
   listingRequests: ListingRequest[];
+  activityLog: ActivityLogEntry[];
   shopifyConnection: {
     connected: boolean;
     shopDomain: string | null;

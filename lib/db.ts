@@ -132,3 +132,30 @@ export async function recordDebugEvent(input: {
     )
   `;
 }
+
+export async function listDebugEvents(limit = 25) {
+  if (!sqlClient) {
+    return [];
+  }
+
+  await ensureSchema();
+  const rows = await sqlClient`
+    SELECT
+      source,
+      topic,
+      status,
+      details,
+      created_at::TEXT AS "createdAt"
+    FROM debug_events
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
+
+  return rows.map((row) => ({
+    source: String(row.source),
+    topic: row.topic === null ? null : String(row.topic),
+    status: String(row.status),
+    details: row.details,
+    createdAt: String(row.createdAt),
+  }));
+}

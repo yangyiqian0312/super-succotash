@@ -1,3 +1,4 @@
+import { listDebugEvents } from "@/lib/db";
 import { listListingRequests } from "@/lib/listing-request-store";
 import { logger } from "@/lib/logger";
 import {
@@ -10,6 +11,7 @@ import { getShopifyConnectionStatus, listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
 import type {
   DashboardData,
+  ActivityLogEntry,
   ListingRequest,
   ShopifyCatalogItem,
   SkuMapping,
@@ -31,11 +33,12 @@ async function safeDashboardValue<T>(label: string, loader: () => Promise<T>, fa
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const [tiktokItems, shopifyItems, mappings, listingRequests, shopifyConnection] = await Promise.all([
+  const [tiktokItems, shopifyItems, mappings, listingRequests, activityLog, shopifyConnection] = await Promise.all([
     safeDashboardValue<TikTokInventoryRecord[]>("tiktok.catalog", listTikTokInventoryCatalog, []),
     safeDashboardValue<ShopifyCatalogItem[]>("shopify.catalog", listShopifyCatalog, []),
     safeDashboardValue<SkuMapping[]>("sku.mappings", listSkuMappings, []),
     safeDashboardValue<ListingRequest[]>("listing.requests", listListingRequests, []),
+    safeDashboardValue<ActivityLogEntry[]>("activity.log", () => listDebugEvents(25), []),
     getShopifyConnectionStatus(),
   ]);
 
@@ -104,6 +107,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     tiktokRows,
     shopifyUnlisted,
     listingRequests,
+    activityLog,
     shopifyConnection: {
       connected: shopifyConnection.connected,
       shopDomain: shopifyConnection.shopDomain,
