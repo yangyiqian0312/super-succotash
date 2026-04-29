@@ -184,6 +184,20 @@ export function mappingMatchesTikTokItem(
   );
 }
 
+export function mappingVariantConflictsWithTikTokItem(
+  mapping: SkuMapping,
+  tiktokItem: TikTokInventoryRecord,
+) {
+  if (!mapping.shopify_variant_title || !tiktokItem.variantTitle) {
+    return false;
+  }
+
+  return (
+    normalizeMatchText(mapping.shopify_variant_title) !==
+    normalizeMatchText(tiktokItem.variantTitle)
+  );
+}
+
 function normalizeMatchText(value: string) {
   return value
     .trim()

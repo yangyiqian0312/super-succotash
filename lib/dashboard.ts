@@ -6,6 +6,7 @@ import {
   findShopifyMatchForTikTokItem,
   mappingMatchesShopifyItem,
   mappingMatchesTikTokItem,
+  mappingVariantConflictsWithTikTokItem,
 } from "@/lib/mapping-store";
 import { getShopifyConnectionStatus, listShopifyCatalog } from "@/lib/shopify";
 import { listTikTokInventoryCatalog } from "@/lib/tiktok";
@@ -43,13 +44,19 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   const tiktokRows: TikTokSyncRow[] = tiktokItems.map((item) => {
-    const mapping =
+    const candidateMapping =
       mappings.find((candidate) => mappingMatchesTikTokItem(candidate, item)) ?? null;
+    const mapping =
+      candidateMapping && !mappingVariantConflictsWithTikTokItem(candidateMapping, item)
+        ? candidateMapping
+        : null;
     const matchedBySku = findShopifyMatchForTikTokItem(item, shopifyItems);
-    const shopifyMatch =
+    const mappedShopifyMatch =
       mapping
-        ? shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ?? matchedBySku
-        : matchedBySku;
+        ? shopifyItems.find((shopifyItem) => mappingMatchesShopifyItem(mapping, shopifyItem)) ?? null
+        : null;
+    const shopifyMatch =
+      matchedBySku ?? mappedShopifyMatch;
 
     const tiktok =
       !item.variantTitle && mapping?.shopify_variant_title
@@ -74,8 +81,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   );
 
   for (const mapping of mappings) {
-    const key = `${mapping.tiktok_product_id}:${mapping.tiktok_sku_id}`;
-    if (tiktokRowKeys.has(key)) {
+    if (tiktokRows.some((row) => row.tiktok.skuId === mapping.tiktok_sku_id)) {
       continue;
     }
 
@@ -99,6 +105,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       syncEnabled: mapping.sync_enabled ?? false,
       canEnableSync: Boolean(shopifyMatch),
     });
+
+    tiktokRowKeys.add(`${mapping.tiktok_product_id}:${mapping.tiktok_sku_id}`);
   }
 
   const listedShopifyVariantIds = new Set(

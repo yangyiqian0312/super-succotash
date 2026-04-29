@@ -10,6 +10,7 @@ import {
   mappingMatchesTikTokItem,
   listSkuMappings,
   mappingMatchesShopifyItem,
+  mappingVariantConflictsWithTikTokItem,
 } from "@/lib/mapping-store";
 import { listShopifyCatalog } from "@/lib/shopify";
 import { syncShopifyProductToTikTok } from "@/lib/sync";
@@ -74,11 +75,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "TikTok SKU not found" }, { status: 404 });
     }
 
-    const shopifyItem =
-      (existingMapping
+    const matchedByVariant = findShopifyMatchForTikTokItem(tiktokItem, shopifyItems);
+    const existingMappingMatch =
+      existingMapping && !mappingVariantConflictsWithTikTokItem(existingMapping, tiktokItem)
         ? shopifyItems.find((item) => mappingMatchesShopifyItem(existingMapping, item))
-        : null) ??
-      findShopifyMatchForTikTokItem(tiktokItem, shopifyItems);
+        : null;
+    const shopifyItem = matchedByVariant ?? existingMappingMatch;
 
     if (body.syncEnabled && !shopifyItem) {
       return NextResponse.json(
