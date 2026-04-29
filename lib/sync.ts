@@ -396,6 +396,7 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
   }
 
   let appliedCount = 0;
+  const lineResults = [];
 
   for (const line of orderLines) {
     const reserveKey = `tiktok:reserve:${line.orderId}:${line.skuId}`;
@@ -406,6 +407,13 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
       logger.info("tiktok.webhook.duplicate", {
         idempotencyKey,
       });
+      lineResults.push({
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
+        sellerSku: line.sellerSku,
+        skipped: true,
+        reason: "duplicate",
+      });
       continue;
     }
 
@@ -413,6 +421,13 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
       logger.info("tiktok.webhook.cancel_without_prior_reserve", {
         orderId: line.orderId,
         tiktokSkuId: line.skuId,
+      });
+      lineResults.push({
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
+        sellerSku: line.sellerSku,
+        skipped: true,
+        reason: "cancel_without_prior_reserve",
       });
       continue;
     }
@@ -424,6 +439,13 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
         tiktokSkuId: line.skuId,
         sellerSku: line.sellerSku,
       });
+      lineResults.push({
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
+        sellerSku: line.sellerSku,
+        skipped: true,
+        reason: "mapping_not_found",
+      });
       continue;
     }
 
@@ -431,6 +453,14 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
       logger.info("tiktok.webhook.sync_disabled", {
         orderId: line.orderId,
         tiktokSkuId: line.skuId,
+      });
+      lineResults.push({
+        orderId: line.orderId,
+        tiktokSkuId: line.skuId,
+        sellerSku: line.sellerSku,
+        shopifyInventoryItemId: mapping.shopify_inventory_item_id,
+        skipped: true,
+        reason: "sync_disabled",
       });
       continue;
     }
@@ -448,6 +478,15 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
 
     await adjustShopifyInventory(mapping.shopify_inventory_item_id, availableDelta);
     await markWebhookProcessed(idempotencyKey);
+    lineResults.push({
+      orderId: line.orderId,
+      tiktokSkuId: line.skuId,
+      sellerSku: line.sellerSku,
+      shopifyInventoryItemId: mapping.shopify_inventory_item_id,
+      quantity: line.quantity,
+      availableDelta,
+      skipped: false,
+    });
     appliedCount += 1;
   }
 
@@ -460,5 +499,6 @@ export async function processTikTokOrderWebhook(payload: TikTokWebhookPayload) {
   return {
     skipped: false,
     appliedCount,
+    lineResults,
   };
 }
