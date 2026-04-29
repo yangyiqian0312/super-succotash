@@ -126,8 +126,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           : {};
 
       return (
-        result.appliedCount !== 0 ||
-        Array.isArray(result.lineResults) ||
+        Number(result.appliedCount ?? 0) > 0 ||
+        (Array.isArray(result.lineResults) && result.lineResults.length > 0) ||
         ["mapping_not_found", "sync_disabled", "no_order_lines"].includes(
           String(result.reason ?? ""),
         )
