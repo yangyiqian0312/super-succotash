@@ -108,7 +108,30 @@ export async function getDashboardData(): Promise<DashboardData> {
     }
 
     if (entry.source === "tiktok.webhook") {
-      return ["order_sync_result", "failed", "invalid_signature"].includes(entry.status);
+      if (["failed", "invalid_signature"].includes(entry.status)) {
+        return true;
+      }
+
+      if (entry.status !== "order_sync_result") {
+        return false;
+      }
+
+      const details =
+        entry.details && typeof entry.details === "object"
+          ? (entry.details as Record<string, unknown>)
+          : {};
+      const result =
+        details.result && typeof details.result === "object"
+          ? (details.result as Record<string, unknown>)
+          : {};
+
+      return (
+        result.appliedCount !== 0 ||
+        Array.isArray(result.lineResults) ||
+        ["mapping_not_found", "sync_disabled", "no_order_lines"].includes(
+          String(result.reason ?? ""),
+        )
+      );
     }
 
     if (entry.source === "shopify.webhook") {
