@@ -38,7 +38,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     safeDashboardValue<ShopifyCatalogItem[]>("shopify.catalog", listShopifyCatalog, []),
     safeDashboardValue<SkuMapping[]>("sku.mappings", listSkuMappings, []),
     safeDashboardValue<ListingRequest[]>("listing.requests", listListingRequests, []),
-    safeDashboardValue<ActivityLogEntry[]>("activity.log", () => listDebugEvents(50), []),
+    safeDashboardValue<ActivityLogEntry[]>("activity.log", () => listDebugEvents(200), []),
     getShopifyConnectionStatus(),
   ]);
 
@@ -108,10 +108,6 @@ export async function getDashboardData(): Promise<DashboardData> {
     }
 
     if (entry.source === "tiktok.webhook") {
-      if (["failed", "invalid_signature"].includes(entry.status)) {
-        return true;
-      }
-
       if (entry.status !== "order_sync_result") {
         return false;
       }
@@ -125,12 +121,15 @@ export async function getDashboardData(): Promise<DashboardData> {
           ? (details.result as Record<string, unknown>)
           : {};
 
+      const lineResults = Array.isArray(result.lineResults) ? result.lineResults : [];
       return (
         Number(result.appliedCount ?? 0) > 0 ||
-        (Array.isArray(result.lineResults) && result.lineResults.length > 0) ||
-        ["mapping_not_found", "sync_disabled", "no_order_lines"].includes(
-          String(result.reason ?? ""),
-        )
+        lineResults.some((line) => {
+          if (!line || typeof line !== "object") {
+            return false;
+          }
+          return (line as Record<string, unknown>).skipped === false;
+        })
       );
     }
 

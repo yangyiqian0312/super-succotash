@@ -509,6 +509,15 @@ function formatActivityDetails(details: unknown) {
   }
 
   const record = details as Record<string, unknown>;
+  const error = typeof record.error === "string" ? record.error : "";
+
+  if (
+    error.includes("\"code\":105005") ||
+    (error.includes("Access denied") && error.includes("required access scope"))
+  ) {
+    return "TikTok Order API permission is missing. Order inventory was not changed; enable the order scope and re-authorize the shop.";
+  }
+
   const result = record.result && typeof record.result === "object"
     ? (record.result as Record<string, unknown>)
     : null;

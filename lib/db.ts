@@ -128,12 +128,12 @@ export async function recordDebugEvent(input: {
     WHERE id IN (
       SELECT id FROM debug_events
       ORDER BY created_at DESC
-      OFFSET 50
+      OFFSET 500
     )
   `;
 }
 
-export async function listDebugEvents(limit = 25) {
+export async function listDebugEvents(limit = 200) {
   if (!sqlClient) {
     return [];
   }
